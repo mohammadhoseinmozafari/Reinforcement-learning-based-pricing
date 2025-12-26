@@ -8,9 +8,6 @@ from copy import copy
 from gymnasium.spaces import Box
 from pettingzoo import ParallelEnv
 
-P_U = 2
-P_O = 2.6
-P_N = 1.4
 class BBPHottelingEnv(ParallelEnv) :
     
     metadata = {
@@ -196,9 +193,10 @@ class BBPHottelingEnv(ParallelEnv) :
     
     @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
+        price_low , price_high = self.firms["A"].price_bounds
         return Box(
-            low = np.array([0, *self.firms["A"].price_bounds], *self.firms["A"].price_bounds),
-            high = np.array([1, *self.firms["A"].price_bounds][::-1], *self.firms["A"].price_bounds[::-1]),
+            low = np.array([0, price_low, price_low, price_low]),
+            high = np.array([1, price_high, price_high, price_high]),
             dtype=np.float32
         )
 
@@ -206,4 +204,6 @@ class BBPHottelingEnv(ParallelEnv) :
 
 
 env = BBPHottelingEnv()
-observations, infos = env.reset()
+# observations, infos = env.reset()
+
+
