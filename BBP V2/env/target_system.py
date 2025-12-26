@@ -11,10 +11,11 @@ Key Features:
 """
 
 from typing import Tuple, List, Dict, Optional
-from dataclasses import dataclass, field
+
 import numpy as np
-from firm import Firm
-from consumer import Consumer
+
+
+from .modules import Firm , Consumer
 
 from config.constants import (
     NUM_CONSUMERS,

@@ -124,4 +124,4 @@ RANDOM_SEED = 42
 # DEBUG MODE
 # =============================================================================
 
-DEBUG_MODE = False  # Set to True for verbose output
+DEBUG_MODE = True  # Set to True for verbose output

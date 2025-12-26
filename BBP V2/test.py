@@ -5,21 +5,22 @@ Tests basic functionality of Consumer, Firm, and Market classes.
 """
 
 import numpy as np
-from env.target_system import HotellingMarket, Consumer, Firm
+from env.target_system import HotellingMarket
+from env.modules import Firm , Consumer
 from config.constants import NUM_CONSUMERS, DEBUG_MODE
 
 
-def test_consumer_creation():
+def test_consumer_creation(num_consumers: int = 3):
     """Test consumer initialization."""
     print("=" * 60)
     print("TEST 1: Consumer Creation")
     print("=" * 60)
     
-    market = HotellingMarket(num_consumers=5, seed=42)
+    market = HotellingMarket(num_consumers=num_consumers, seed=42)
     
     for i, consumer in enumerate(market.consumers):
         info = consumer.get_info()
-        print(f"Consumer {i}: loc={info['location']:.2f}, alpha={info['alpha']:.2f}, beta={info['beta']:.2f}")
+        print(f"Consumer {i}: loc={info['location']:.2f}, exclusivity seekness={info['exclusivity seekness']:.2f}, strategicness={info['strategicness']:.2f}")
     
     print("✓ Consumer creation test passed\n")
 
@@ -62,8 +63,9 @@ def test_market_step():
     print("TEST 3: Market Step Execution")
     print("=" * 60)
     
-    market = HotellingMarket(num_consumers=20, seed=42)
-    
+    market = HotellingMarket(num_consumers=3, seed=42)
+    for consumer in market.consumers:
+        print(consumer.get_info())
     # Set regimes
     market.set_regimes(regime_0=0, regime_1=0)  # Both uniform
     
@@ -203,13 +205,13 @@ def test_episode_simulation():
 
 
 if __name__ == "__main__":
-    test_consumer_creation()
-    test_firm_pricing()
+    # test_consumer_creation()
+    # test_firm_pricing()
     test_market_step()
-    test_bbp_strategy()
-    test_observations()
-    test_episode_simulation()
+    # test_bbp_strategy()
+    # test_observations()
+    # test_episode_simulation()
     
-    print("=" * 60)
-    print("✓ ALL TESTS PASSED")
-    print("=" * 60)
+    # print("=" * 60)
+    # print("✓ ALL TESTS PASSED")
+    # print("=" * 60)
