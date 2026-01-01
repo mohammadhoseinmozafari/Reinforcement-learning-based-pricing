@@ -22,33 +22,33 @@
 │    Economic Simulator (target_system.py)                │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ HotellingMarket                                  │   │
-│  ├──────────────────────────────────────────────────┤   │
-│  │  • Manages consumers and firms                   │   │
-│  │  • Executes market clearing each period         │   │
-│  │  • Calculates profits and market shares         │   │
-│  │  • Generates observations                       │   │
-│  └──────────┬──────────────────────────────────────┘   │
-│             │                                            │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │ HotellingMarket                                 │    │
+│  ├─────────────────────────────────────────────────┤    │
+│  │  • Manages consumers and firms                  │    │
+│  │  • Executes market clearing each period         │    │
+│  │  • Calculates profits and market shares         │    │
+│  │  • Generates observations                       │    │
+│  └──────────┬──────────────────────────────────────┘    │
+│             │                                           │
 │    ┌────────┴────────┐                                  │
-│    ▼                 ▼                                   │
-│  ┌────────┐      ┌──────────────┐                      │
-│  │Consumer│      │ Firm         │                      │
-│  ├────────┤      ├──────────────┤                      │
-│  │location│      │regime        │                      │
-│  │α (excl)│      │prices        │                      │
-│  │β (disc)│      │market_share  │                      │
-│  │utility │      │profit        │                      │
-│  │history │      │retention     │                      │
-│  └────────┘      └──────────────┘                      │
+│    ▼                 ▼                                  │
+│  ┌────────┐      ┌──────────────┐                       │
+│  │Consumer│      │ Firm         │                       │
+│  ├────────┤      ├──────────────┤                       │ 
+│  │location│      │regime        │                       │ 
+│  │α (excl)│      │prices        │                       │
+│  │β (disc)│      │market_share  │                       │
+│  │utility │      │profit        │                       │
+│  │history │      │retention     │                       │
+│  └────────┘      └──────────────┘                       │
 │                                                         │
 │  Market Mechanics:                                      │
-│  1. Set prices for each firm                           │
-│  2. Each consumer chooses firm based on utility        │
-│  3. Calculate market shares and profits               │
-│  4. Update firm and consumer histories                 │
-│  5. Generate observations                              │
+│  1. Set prices for each firm                            │
+│  2. Each consumer chooses firm based on utility         │
+│  3. Calculate market shares and profits                 │
+│  4. Update firm and consumer histories                  │
+│  5. Generate observations                               │
 │                                                         │
 └────────────────┬────────────────────────────────────────┘
                  │
@@ -59,7 +59,7 @@
 │  • Consumer parameters (α, β ranges)                    │
 │  • Price ranges (uniform, new, old)                     │
 │  • Hierarchical control parameters (K)                  │
-│  • Observation dimensions                              │
+│  • Observation dimensions                               │
 └─────────────────────────────────────────────────────────┘
 ```
 
