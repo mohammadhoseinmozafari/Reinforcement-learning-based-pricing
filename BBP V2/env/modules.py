@@ -9,6 +9,7 @@ from config.constants import (
     MAX_HISTORY_LENGTH,
     MARGINAL_COST,
     MAX_HISTORY_LENGTH,
+    DEBUG_MODE
 )
 # =============================================================================
 # CONSUMER CLASS
@@ -53,6 +54,7 @@ class Consumer:
         
         # Track which firm consumer bought from last period (None if no history)
         self.last_firm_choice: Optional[int] = None
+        
     
     @property
     def exclusivity_pref(self) -> float:
@@ -131,6 +133,10 @@ class Consumer:
             - TRANSPORTATION_COST * distance 
             - self.alpha * firm.market_share
         )
+        if DEBUG_MODE:
+            print(f"Consumer {self.id} instant utility from Firm {firm.firm_id}: "
+                  f"V={BASE_VALUE}, price={price:.2f}, distance={distance:.2f}, "
+                  f"popularity={firm.market_share:.2f} => U={utility:.2f}")
         return utility
 
     def expected_price(self, firm: 'Firm') -> float:
@@ -160,7 +166,11 @@ class Consumer:
         # Exponential moving average (more recent prices weighted higher)
         weights = np.array([0.9 ** i for i in range(len(prices))])
         weights = weights / weights.sum()
-        return np.dot(prices, weights)
+        expected_price = np.dot(prices, weights)
+        if DEBUG_MODE:
+            print(f"Consumer {self.id} expected price from Firm {firm.firm_id}: "
+                  f"prices={prices}, expected_price={expected_price:.2f}")
+        return expected_price
 
     def expected_popularity(self, firm: 'Firm') -> float:
         """
@@ -180,7 +190,11 @@ class Consumer:
         
         # Use recent history
         recent = history[-min(5, len(history)):]
-        return np.mean(recent)
+        expected_popularity = np.mean(recent)
+        if DEBUG_MODE:
+            print(f"Consumer {self.id} expected popularity from Firm {firm.firm_id}: "
+                  f"recent={recent}, expected_popularity={expected_popularity:.2f}")
+        return expected_popularity
 
     def expected_utility(self, firm: 'Firm') -> float:
         """
@@ -204,6 +218,10 @@ class Consumer:
             - TRANSPORTATION_COST * distance 
             - self.alpha * exp_pop
         )
+        if DEBUG_MODE:
+            print(f"Consumer {self.id} expected utility from Firm {firm.firm_id}: "
+                  f"V={BASE_VALUE}, E[price]={exp_price:.2f}, distance={distance:.2f}, "
+                  f"E[popularity]={exp_pop:.2f} => U={utility:.2f}")
         return utility
 
     def total_utility(self, firm: 'Firm') -> float:
@@ -327,6 +345,7 @@ class Firm:
         self.last_period_profit = 0.0
         self.cumulative_profit = 0.0
         self.last_period_quantity = 0
+
 
     # ========================
     # PRICING METHODS

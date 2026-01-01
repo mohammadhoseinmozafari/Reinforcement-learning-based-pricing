@@ -19,7 +19,7 @@ FIRM_B_LOCATION = 1.0
 
 # Economic parameters
 TRANSPORTATION_COST = 1.0
-BASE_VALUE = 10.0
+BASE_VALUE = 10
 MARGINAL_COST = 0.0
 
 # =============================================================================
@@ -106,7 +106,7 @@ TOTAL_OBS_PC_DIM = (
 # HISTORY TRACKING
 # =============================================================================
 
-MAX_HISTORY_LENGTH = 20  # Max periods to track for trends
+MAX_HISTORY_LENGTH = 200  # Max periods to track for trends
 
 # =============================================================================
 # AGENT IDs
@@ -124,4 +124,4 @@ RANDOM_SEED = 42
 # DEBUG MODE
 # =============================================================================
 
-DEBUG_MODE = True  # Set to True for verbose output
+DEBUG_MODE = False  # Set to True for verbose output
