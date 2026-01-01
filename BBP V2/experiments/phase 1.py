@@ -199,27 +199,32 @@ for step in range(100):
     # Calculate values
     firm_a_avg = moving_average(pd.Series(market.firms[0].market_share_history))
     firm_b_avg = moving_average(pd.Series(market.firms[1].market_share_history))
-    
-    current_share_a = market.firms[0].market_share
-    current_share_b = market.firms[1].market_share
-    current_profit_a = market.firms[0].profit_history[-1]
-    current_profit_b = market.firms[1].profit_history[-1]
-    total_profit_a = sum(market.firms[0].profit_history)
-    total_profit_b = sum(market.firms[1].profit_history)
+    firm_a_state,firm_b_state = market.get_firm_state(0), market.get_firm_state(1)
+    firm_a_share , firm_b_share =firm_a_state["market_share"], firm_b_state["market_share"]
+    firm_a_popularity_change, firm_b_popularity_change = firm_a_state["popularity_change"], firm_b_state["popularity_change"]
+    firm_a_retention_rate, firm_b_retention_rate = firm_a_state["retention_rate"], firm_b_state["retention_rate"]
+    firm_a_relative_popularity, firm_b_relative_popularity = firm_a_state["relative_popularity"], firm_b_state["relative_popularity"]
+    firm_a_new_old_ratio, firm_b_new_old_ratio = firm_a_state["new_old_ratio"], firm_b_state["new_old_ratio"]
+    firm_a_last_demand, firm_b_last_demand = firm_a_state["last_demand"], firm_b_state["last_demand"]
+    firm_a_period_profit, firm_b_period_profit = firm_a_state["period_profit"], firm_b_state["period_profit"]
+    firm_a_cumulative_profit, firm_b_cumulative_profit = firm_a_state["cumulative_profit"], firm_b_state["cumulative_profit"]
+    firm_a_demand_new, firm_b_demand_new = firm_a_state["demand_new"], firm_b_state["demand_new"]
+    firm_a_demand_old, firm_b_demand_old = firm_a_state["demand_old"], firm_b_state["demand_old"]
+
     
     # Update metrics
-    metric_a_share.metric("🏢 Firm A Share", f"{current_share_a:.1%}", 
-                          delta=f"{current_share_a - 0.5:+.1%}" if step > 0 else None)
-    metric_b_share.metric("🏭 Firm B Share", f"{current_share_b:.1%}",
-                          delta=f"{current_share_b - 0.5:+.1%}" if step > 0 else None)
-    metric_a_profit.metric("💵 Firm A Profit", f"${total_profit_a:,.0f}")
-    metric_b_profit.metric("💰 Firm B Profit", f"${total_profit_b:,.0f}")
+    metric_a_share.metric("🏢 Firm A Share", f"{firm_a_share:.1%}", 
+                          delta=f"{firm_a_share - 0.5:+.1%}" if step > 0 else None)
+    metric_b_share.metric("🏭 Firm B Share", f"{firm_b_share:.1%}",
+                          delta=f"{firm_b_share - 0.5:+.1%}" if step > 0 else None)
+    metric_a_profit.metric("💵 Firm A Profit", f"${firm_a_period_profit:,.0f}")
+    metric_b_profit.metric("💰 Firm B Profit", f"${firm_b_period_profit:,.0f}")
     
     # Update charts
-    chart_share.add_rows(pd.DataFrame({"Firm A": [current_share_a], "Firm B": [current_share_b]}))
+    chart_share.add_rows(pd.DataFrame({"Firm A": [firm_a_share], "Firm B": [firm_b_share]}))
     chart_avg.add_rows(pd.DataFrame({"Firm A": [firm_a_avg.iloc[-1]], "Firm B": [firm_b_avg.iloc[-1]]}))
-    chart_profit.add_rows(pd.DataFrame({"Firm A": [current_profit_a], "Firm B": [current_profit_b]}))
-    chart_cumulative.add_rows(pd.DataFrame({"Firm A": [total_profit_a], "Firm B": [total_profit_b]}))
+    chart_profit.add_rows(pd.DataFrame({"Firm A": [firm_a_period_profit], "Firm B": [firm_b_period_profit]}))
+    chart_cumulative.add_rows(pd.DataFrame({"Firm A": [firm_a_cumulative_profit], "Firm B": [firm_b_cumulative_profit]}))
     
     # Update progress
     progress_bar.progress((step + 1) / 100, text=f"⏳ Simulation Progress: Step {step + 1}/100")
