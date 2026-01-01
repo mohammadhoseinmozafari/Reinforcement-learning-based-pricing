@@ -48,6 +48,8 @@ class HotellingMarket:
         self,
         num_consumers: int = NUM_CONSUMERS,
         seed: Optional[int] = 42,
+        exclusivity_mean: Optional[float] = None,
+        strategicness_mean: Optional[float] = None,
     ):
         """
         Initialize market.
@@ -59,6 +61,8 @@ class HotellingMarket:
         self.num_consumers = num_consumers
         self.seed = seed
         self.rng = np.random.RandomState(seed)
+        self.exclusivity_mean = exclusivity_mean
+        self.strategicness_mean = strategicness_mean
         
         # Create agents
         self.consumers: List[Consumer] = self._create_consumers()
@@ -77,8 +81,22 @@ class HotellingMarket:
             consumer = Consumer(
                 consumer_id=i,
                 location=self.rng.uniform(HOTELLING_LEFT, HOTELLING_RIGHT),
-                exclusivity_preference=self.rng.uniform(ALPHA_MIN, ALPHA_MAX),
-                strategic_foresight=self.rng.uniform(BETA_MIN, BETA_MAX),
+                exclusivity_preference=self.rng.uniform(
+                    ALPHA_MIN,
+                    ALPHA_MAX
+                ) if self.exclusivity_mean is None else np.clip(
+                    self.rng.normal(self.exclusivity_mean, 0.1),
+                    ALPHA_MIN,
+                    ALPHA_MAX
+                ),
+                strategic_foresight=self.rng.uniform(
+                    BETA_MIN,
+                    BETA_MAX
+                ) if self.strategicness_mean is None else np.clip(
+                    self.rng.normal(self.strategicness_mean, 0.1),
+                    BETA_MIN,
+                    BETA_MAX
+                ),
             )
             consumers.append(consumer)
         return consumers
