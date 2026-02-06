@@ -190,7 +190,7 @@ class Consumer:
         
         # Use recent history
         recent = history[-min(5, len(history)):]
-        expected_popularity = np.mean(recent)
+        expected_popularity = float(np.mean(recent))
         if DEBUG_MODE:
             print(f"Consumer {self.id} expected popularity from Firm {firm.firm_id}: "
                   f"recent={recent}, expected_popularity={expected_popularity:.2f}")
@@ -457,11 +457,14 @@ class Firm:
         if len(self.market_share_history) > MAX_HISTORY_LENGTH:
             self.market_share_history.pop(0)
         
-        # Calculate relative popularity
+        # Calculate relative popularity (clamped to avoid inf values that break neural networks)
         if competitor.market_share > 0:
             self.relative_popularity = self.market_share / competitor.market_share
         else:
-            self.relative_popularity = float('inf') if self.market_share > 0 else 1.0
+            # Use a large but finite value instead of inf
+            self.relative_popularity = 10.0 if self.market_share > 0 else 1.0
+        # Clamp to reasonable range for RL stability
+        self.relative_popularity = min(self.relative_popularity, 10.0)
         
         # Calculate retention rate
         self._calculate_retention_rate()
@@ -542,7 +545,7 @@ class Firm:
         
         # Normalized trend
         trend = (recent - earlier) / (abs(earlier) + 1e-6)
-        return np.clip(trend, -1.0, 1.0)
+        return float(np.clip(trend, -1.0, 1.0))
 
     def get_new_old_ratio(self) -> float:
         """Get ratio of new customers to total demand."""
