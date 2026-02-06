@@ -141,6 +141,7 @@ class HotellingDuopolyEnv(ParallelEnv):
         # OBSERVATION SPACES
         # =====================================
         # Strategy controller observations
+        # NOTE: All observations use Box spaces for RL compatibility (neural networks expect arrays)
         sc_obs_space = spaces.Dict(
             {
                 "market_share": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
@@ -148,12 +149,13 @@ class HotellingDuopolyEnv(ParallelEnv):
                 "retention_rate": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
                 "profit_trend": spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32),
                 "relative_popularity": spaces.Box(0.0, 10.0, shape=(1,), dtype=np.float32),
-                "competitor_regime": spaces.Discrete(NUM_STRATEGY_ACTIONS),
+                "competitor_regime": spaces.Box(0.0, float(NUM_STRATEGY_ACTIONS - 1), shape=(1,), dtype=np.float32),
                 "time_progress": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
             }
         )
 
         # Pricing controller observations
+        # NOTE: All observations use Box spaces for RL compatibility (neural networks expect arrays)
         pc_obs_space = spaces.Dict(
             {
                 "market_share": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
@@ -161,8 +163,8 @@ class HotellingDuopolyEnv(ParallelEnv):
                 "own_prices": spaces.Box(0.0, 10.0, shape=(3,), dtype=np.float32),
                 "comp_prices": spaces.Box(0.0, 10.0, shape=(3,), dtype=np.float32),
                 "last_demand": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
-                "regime": spaces.Discrete(NUM_STRATEGY_ACTIONS),
-                "competitor_regime": spaces.Discrete(NUM_STRATEGY_ACTIONS),
+                "regime": spaces.Box(0.0, float(NUM_STRATEGY_ACTIONS - 1), shape=(1,), dtype=np.float32),
+                "competitor_regime": spaces.Box(0.0, float(NUM_STRATEGY_ACTIONS - 1), shape=(1,), dtype=np.float32),
                 "market_concentration": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
             }
         )
@@ -239,23 +241,23 @@ class HotellingDuopolyEnv(ParallelEnv):
             observations, rewards, terminations, truncations, infos
         """
         self.timestep += 1
-        self.steps_in_cycle += 1
 
         # ===============================================
-        # STRATEGY CONTROLLER: Update regime every K steps
+        # STRATEGY CONTROLLER: Update regime at start of each cycle
         # ===============================================
-        if self.steps_in_cycle == 1:
-            # Strategy controller makes decisions
+        if self.steps_in_cycle == 0:
+            # Strategy controller makes decisions at the START of each cycle
             for agent in AGENT_IDS:
                 strategy_action = actions[agent]["strategy"]
                 self.regimes[agent] = int(strategy_action)
                 self.regime_commit_steps[agent] = 0
 
-        # Increment regime commitment counter
+        # Increment counters AFTER checking for strategy decision
+        self.steps_in_cycle += 1
         for agent in AGENT_IDS:
             self.regime_commit_steps[agent] += 1
 
-        # Reset cycle if complete
+        # Reset cycle if complete (will trigger strategy update next step)
         if self.steps_in_cycle >= self.strategy_cycle:
             self.steps_in_cycle = 0
 
@@ -363,13 +365,16 @@ class HotellingDuopolyEnv(ParallelEnv):
         # ===================================
         # STRATEGY CONTROLLER OBSERVATION
         # ===================================
+        # Clamp relative_popularity to avoid inf values that break neural networks
+        clamped_relative_popularity = min(firm.relative_popularity, 10.0) if np.isfinite(firm.relative_popularity) else 10.0
+        
         sc_observation = {
             "market_share": np.array([firm.market_share], dtype=np.float32),
             "popularity_change": np.array([firm.get_popularity_change()], dtype=np.float32),
             "retention_rate": np.array([firm.retention_rate], dtype=np.float32),
             "profit_trend": np.array([firm.get_profit_trend()], dtype=np.float32),
-            "relative_popularity": np.array([min(firm.relative_popularity, 10.0)], dtype=np.float32),
-            "competitor_regime": competitor.pricing_regime,
+            "relative_popularity": np.array([clamped_relative_popularity], dtype=np.float32),
+            "competitor_regime": np.array([float(competitor.pricing_regime)], dtype=np.float32),
             "time_progress": np.array([time_progress], dtype=np.float32),
         }
 
@@ -391,8 +396,8 @@ class HotellingDuopolyEnv(ParallelEnv):
                 [firm.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.0],
                 dtype=np.float32,
             ),
-            "regime": firm.pricing_regime,
-            "competitor_regime": competitor.pricing_regime,
+            "regime": np.array([float(firm.pricing_regime)], dtype=np.float32),
+            "competitor_regime": np.array([float(competitor.pricing_regime)], dtype=np.float32),
             "market_concentration": np.array(
                 [self.market.get_market_concentration()], dtype=np.float32
             ),
