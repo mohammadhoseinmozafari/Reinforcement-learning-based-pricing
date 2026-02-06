@@ -265,10 +265,10 @@ class HotellingMarket:
         locations = [c.location for c in self.consumers]
         
         return {
-            "mean_alpha": np.mean(alphas),
-            "std_alpha": np.std(alphas),
-            "mean_beta": np.mean(betas),
-            "std_beta": np.std(betas),
-            "mean_location": np.mean(locations),
-            "std_location": np.std(locations),
+            "mean_alpha": float(np.mean(alphas)),
+            "std_alpha": float(np.std(alphas)),
+            "mean_beta": float(np.mean(betas)),
+            "std_beta": float(np.std(betas)),
+            "mean_location": float(np.mean(locations)),
+            "std_location": float(np.std(locations)),
         }
