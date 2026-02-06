@@ -234,3 +234,4 @@ for step in range(100):
 # Completion message
 progress_bar.progress(100, text="✅ Simulation Complete!")
 st.balloons()
+
