@@ -9,7 +9,7 @@ Unified configuration for economic model and RL environment.
 # =============================================================================
 
 NUM_CONSUMERS = 50
-EPISODE_LENGTH = 200
+EPISODE_LENGTH = 300
 
 # Hotelling line
 HOTELLING_LEFT = 0.0

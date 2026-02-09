@@ -26,12 +26,7 @@ import json
 import os
 
 from env.uniform_pricing_env import UniformPricingEnv, make_uniform_pricing_env
-from env.opponent_policies import (
-    ConstantOpponentPolicy,
-    RuleBasedOpponentPolicy,
-    create_preset_opponent,
-)
-from models.SAC import SAC, ReplayBuffer
+from models.SAC import SAC
 from config.constants import (
     EPISODE_LENGTH,
     PRICE_UNIFORM_MIN,
@@ -48,7 +43,7 @@ class TrainingConfig:
     """Configuration for Phase 2.1 training."""
     # Environment
     num_consumers: int = 50
-    episode_length: int = 200
+    episode_length: int = EPISODE_LENGTH
     opponent_type: str = "passive_uniform"
     
     # SAC hyperparameters
@@ -77,7 +72,7 @@ class TrainingConfig:
     seed: int = 42
     
     # Paths
-    save_dir: str = "results/phase2_1_uniform"
+    save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"
 
 
 @dataclass
@@ -268,7 +263,7 @@ def train_uniform_pricing(
                 print(f"Episode {episode + 1}/{config.num_episodes} | "
                       f"Avg Reward: {avg_reward:.1f} | "
                       f"Eval: {eval_reward:.1f} | "
-                      f"Price: {PRICE_UNIFORM_MIN + avg_price * (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN):.2f} | "
+                      f"Price: { avg_price :.2f} | "
                       f"Share: {avg_share:.2f} | "
                       f"α: {agent.alpha:.4f}")
         
@@ -403,7 +398,7 @@ def plot_training_results(metrics: TrainingMetrics, config: TrainingConfig):
     
     # Prices
     ax = axes[0, 2]
-    actual_prices = [PRICE_UNIFORM_MIN + p * (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN) 
+    actual_prices = [p 
                      for p in metrics.episode_prices]
     ax.plot(actual_prices, alpha=0.7)
     ax.axhline(y=2.5, color='r', linestyle='--', label='Opponent Price')
@@ -477,7 +472,7 @@ def main():
     # Final statistics
     print(f"\nFinal 50 episodes:")
     print(f"  Avg Reward: {np.mean(metrics.episode_rewards[-50:]):.2f}")
-    print(f"  Avg Price: {PRICE_UNIFORM_MIN + np.mean(metrics.episode_prices[-50:]) * (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN):.2f}")
+    print(f"  Avg Price: {np.mean(metrics.episode_prices[-50:]):.2f}")
     print(f"  Avg Market Share: {np.mean(metrics.episode_market_shares[-50:]):.2f}")
     
     # Plot
