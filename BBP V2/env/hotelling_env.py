@@ -13,9 +13,9 @@ Architecture:
 from typing import Dict, Tuple, Any, Optional
 import numpy as np
 from gymnasium import spaces
-
 from pettingzoo import ParallelEnv
-from env.target_system import HotellingMarket
+
+from env.models import HotellingMarket
 from config.constants import (
     AGENT_IDS,
     EPISODE_LENGTH,
@@ -30,6 +30,7 @@ from config.constants import (
     PRICE_BBP_OLD_MAX,
     NUM_CONSUMERS,
     RANDOM_SEED,
+    FORCED_DEFAULT_CYCLE,
     CONSUMER_FORESIGHT_HORIZON,
     MAX_HISTORY_LENGTH,
     OBS_SC_POPULARITY,
@@ -87,8 +88,9 @@ class HotellingDuopolyEnv(ParallelEnv):
         num_consumers: int = NUM_CONSUMERS,
         episode_length: int = EPISODE_LENGTH,
         strategy_cycle: int = STRATEGY_CYCLE_LENGTH,
+        forced_default_cycles: int = FORCED_DEFAULT_CYCLE,
         seed: Optional[int] = RANDOM_SEED,
-    ):
+    ) ->   None:
         """
         Initialize hierarchical Hotelling environment.
 
@@ -96,6 +98,7 @@ class HotellingDuopolyEnv(ParallelEnv):
             num_consumers: Number of consumers in market
             episode_length: Horizon T (total steps per episode)
             strategy_cycle: Strategy controller frequency K (steps between decisions)
+            forced_defautl_cyclecs: Forces the agent to use default pricing strategy (Uniform Pricing) for first N cycles
             seed: Random seed
         """
         super().__init__()
@@ -104,6 +107,8 @@ class HotellingDuopolyEnv(ParallelEnv):
         self.episode_length = episode_length
         self.strategy_cycle = strategy_cycle
         self.seed_value = seed
+        self.forced_default_cycles = forced_default_cycles
+        self.initial_forced_cycles_remaining = forced_default_cycles
 
         # Economic simulator
         self.market = HotellingMarket(num_consumers=num_consumers, seed=seed)
