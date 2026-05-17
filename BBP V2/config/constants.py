@@ -58,6 +58,7 @@ BBP_RETENTION_PERIODS = 2
 # =============================================================================
 
 STRATEGY_CYCLE_LENGTH = 10  # K: strategy acts every K steps
+FORCED_DEFAULT_CYCLE = 1
 NUM_STRATEGY_ACTIONS = 2    # {0: Uniform, 1: BBP}
 PRICING_ACTION_DIM = 3      # [uniform_price, price_new, price_old]
 
