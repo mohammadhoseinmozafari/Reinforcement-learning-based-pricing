@@ -107,6 +107,7 @@ class HotellingDuopolyEnv(ParallelEnv):
         self.episode_length = episode_length
         self.strategy_cycle = strategy_cycle
         self.seed_value = seed
+
         self.forced_default_cycles = forced_default_cycles
         self.initial_forced_cycles_remaining = forced_default_cycles
 
@@ -212,6 +213,7 @@ class HotellingDuopolyEnv(ParallelEnv):
         # Reset regimes
         self.regimes = {"firm_0": 0, "firm_1": 0}
         self.regime_commit_steps = {"firm_0": 0, "firm_1": 0}
+        self.initial_forced_cycles_remaining= self.forced_default_cycles
 
         # Get observations
         observations = {agent: self._get_observation(agent) for agent in AGENT_IDS}
@@ -253,7 +255,10 @@ class HotellingDuopolyEnv(ParallelEnv):
         if self.steps_in_cycle == 0:
             # Strategy controller makes decisions at the START of each cycle
             for agent in AGENT_IDS:
-                strategy_action = actions[agent]["strategy"]
+                if self.initial_forced_cycles_remaining> 0:
+                    strategy_action = 0
+                else: 
+                    strategy_action = actions[agent]["strategy"]
                 self.regimes[agent] = int(strategy_action)
                 self.regime_commit_steps[agent] = 0
 
@@ -265,6 +270,9 @@ class HotellingDuopolyEnv(ParallelEnv):
         # Reset cycle if complete (will trigger strategy update next step)
         if self.steps_in_cycle >= self.strategy_cycle:
             self.steps_in_cycle = 0
+
+        if self.initial_forced_cycles_remaining> 0:
+            self.initial_forced_cycles_remaining-= 1
 
         # ===============================================
         # PRICING CONTROLLER: Convert actions to prices
