@@ -334,60 +334,6 @@ class ConstantOpponentPolicy(OpponentPolicy):
                 f"new={self._price_new:.2f}, old={self._price_old:.2f}, regime={self.regime})")
 
 
-# =============================================================================
-# PHASE 1 EMPIRICAL OPPONENT POLICY
-# =============================================================================
-
-class Phase1EmpiricalOpponentPolicy(ConstantOpponentPolicy):
-    """
-    Opponent using empirically derived prices from Phase 1 experiments.
-    
-    This is functionally identical to ConstantOpponentPolicy but provides
-    clearer semantics when using prices derived from Phase 1 equilibrium
-    analysis or experimental results.
-    
-    Typical use cases:
-    - Training against "average" Phase 1 competitor behavior
-    - Reproducing specific experimental conditions
-    - Validating learning agent against known baselines
-    """
-    
-    def __init__(
-        self,
-        uniform_price: float = 2.5,
-        price_new: float = 2.0,
-        price_old: float = 3.0,
-        regime: int = 0,
-        experiment_name: str = "phase1_default",
-        bounds: Optional[PriceBounds] = None,
-        seed: Optional[int] = None
-    ):
-        """
-        Initialize with Phase 1 empirical prices.
-        
-        Args:
-            uniform_price: Empirical uniform price from Phase 1
-            price_new: Empirical BBP new price from Phase 1
-            price_old: Empirical BBP old price from Phase 1
-            regime: Pricing regime observed in Phase 1
-            experiment_name: Name/ID of source experiment
-            bounds: Price bounds
-            seed: Random seed
-        """
-        super().__init__(
-            uniform_price=uniform_price,
-            price_new=price_new,
-            price_old=price_old,
-            regime=regime,
-            bounds=bounds,
-            seed=seed
-        )
-        self.experiment_name = experiment_name
-    
-    def __repr__(self) -> str:
-        return (f"Phase1EmpiricalOpponentPolicy(experiment='{self.experiment_name}', "
-                f"uniform={self._uniform_price:.2f}, new={self._price_new:.2f}, "
-                f"old={self._price_old:.2f}, regime={self.regime})")
 
 
 # =============================================================================
@@ -528,15 +474,86 @@ class RuleBasedOpponentPolicy(OpponentPolicy):
         price_new = self.bounds.clip_bbp_new(price_new)
         price_old = self.bounds.clip_bbp_old(price_old)
         
-        # Enforce constraint: price_old >= price_new
-        price_old = max(price_old, price_new)
-        
-        return price_new, price_old
+        # Enforce constraint: price_old >= price_newimport numpy as np
+
+class RandomizedRuleBasedOpponentPolicy(RuleBasedOpponentPolicy):
+    """
+    A reactive opponent whose base prices are randomized each episode.
     
-    def __repr__(self) -> str:
-        return (f"RuleBasedOpponentPolicy(base_uniform={self._base_uniform:.2f}, "
-                f"sensitivity={self.market_share_sensitivity:.2f}, "
-                f"step={self.price_step:.2f}, regime={self.regime})")
+    On each reset(), a new base_uniform_price is sampled from a given range.
+    Optionally, other parameters like sensitivity and price_step can also
+    be randomized for even broader domain randomization.
+    """
+    def __init__(
+        self,
+        base_uniform_range=(0.5, 5.0),
+        base_price_new_factor=0.8,          # new price = factor * base_uniform
+        base_price_old_factor=1.2,          # old price = factor * base_uniform
+        regime=0,
+        market_share_sensitivity=1.0,
+        price_step=1.0,
+        # If you want to randomize sensitivity/step as well, provide ranges:
+        sensitivity_range=None,             # e.g., (0.5, 1.5)
+        step_range=None,                    # e.g., (0.5, 1.5)
+        enable_price_matching=False,
+        price_matching_offset=-0.1,
+        bounds=None,
+        seed=None,
+    ):
+        """
+        Args:
+            base_uniform_range: (min, max) for uniform base price.
+            base_price_new_factor: multiplier for new price relative to base.
+            base_price_old_factor: multiplier for old price relative to base.
+            sensitivity_range: optional (min, max) to randomize sensitivity.
+            step_range: optional (min, max) to randomize price_step.
+            (Other args same as RuleBasedOpponentPolicy)
+        """
+        self.base_uniform_range = base_uniform_range
+        self.base_price_new_factor = base_price_new_factor
+        self.base_price_old_factor = base_price_old_factor
+        self.sensitivity_range = sensitivity_range
+        self.step_range = step_range
+
+        # We'll start with a dummy base price, reset will override it.
+        # Call parent with dummy values; reset will reinitialize internal fields.
+        super().__init__(
+            base_uniform_price=np.mean(base_uniform_range),
+            base_price_new=np.mean(base_uniform_range)*base_price_new_factor,
+            base_price_old=np.mean(base_uniform_range)*base_price_old_factor,
+            regime=regime,
+            market_share_sensitivity=market_share_sensitivity,
+            price_step=price_step,
+            enable_price_matching=enable_price_matching,
+            price_matching_offset=price_matching_offset,
+            bounds=bounds,
+            seed=seed,
+        )
+
+    def reset(self, seed=None):
+        """Randomize parameters for a new episode, then call parent reset."""
+        if seed is not None:
+            self.rng = np.random.RandomState(seed)
+
+        # Randomize base prices
+        base_uniform = self.rng.uniform(*self.base_uniform_range)
+        self._base_uniform = self.bounds.clip_uniform(base_uniform)
+        self._base_new = self.bounds.clip_bbp_new(base_uniform * self.base_price_new_factor)
+        self._base_old = self.bounds.clip_bbp_old(max(
+            base_uniform * self.base_price_old_factor,
+            self._base_new
+        ))
+
+        # Optional: randomize sensitivity
+        if self.sensitivity_range is not None:
+            self.market_share_sensitivity = self.rng.uniform(*self.sensitivity_range)
+
+        # Optional: randomize price step
+        if self.step_range is not None:
+            self.price_step = self.rng.uniform(*self.step_range)
+
+        # Call parent reset to reseed the RNG if needed (but we already handled seed)
+        super().reset(seed=seed)
 
 
 # =============================================================================
@@ -564,6 +581,7 @@ def create_opponent_policy(
         "constant": ConstantOpponentPolicy,
         
         "rule_based": RuleBasedOpponentPolicy,
+        "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
     }
     
@@ -618,6 +636,17 @@ OPPONENT_PRESETS = {
         "market_share_sensitivity": 1.0,
         "price_step": 1.0,
     },
+    
+    "random_reactive_uniform":{
+        "policy_type" : "randomized_rule_based",
+        "base_uniform_range" :(0.5, 5.0),
+        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
+        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
+        "regime":0,
+        "market_share_sensitivity" :1.0,
+        "price_step" :1.0,
+    },
+
     "reactive_bbp": {
         "policy_type": "rule_based",
         "base_uniform_price": 2.5,
