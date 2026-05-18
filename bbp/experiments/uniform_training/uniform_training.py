@@ -11,14 +11,15 @@ Features:
 - Training visualization
 """
 
-import sys
-from pathlib import Path
+
+
+
 
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Dict, List, Optional, Tuple
+import seaborn as sns
+from typing import Dict, List,  Tuple
 from dataclasses import dataclass, field
-from datetime import datetime
 import json
 import os
 
@@ -41,7 +42,7 @@ class TrainingConfig:
     # Environment
     num_consumers: int = 50
     episode_length: int = EPISODE_LENGTH
-    opponent_type: str = "reactive_uniform"
+    opponent_type: str = "random_reactive_uniform"
     
     # SAC hyperparameters
     hidden_dim: int = 256
@@ -76,8 +77,13 @@ class TrainingConfig:
 class TrainingMetrics:
     """Metrics tracked during training."""
     episode_rewards: List[float] = field(default_factory=list)
+
     episode_profits: List[float] = field(default_factory=list)
+    episode_opp_profits: List[float] = field(default_factory=list)
+
     episode_prices: List[float] = field(default_factory=list)
+    episode_opp_prices: List[float] = field(default_factory=list)
+
     episode_market_shares: List[float] = field(default_factory=list)
     eval_rewards: List[float] = field(default_factory=list)
     critic_losses: List[float] = field(default_factory=list)
@@ -89,11 +95,17 @@ class TrainingMetrics:
     step_prices: List[float] = field(default_factory=list)
     step_market_shares: List[float] = field(default_factory=list)
     
+    step_opp_profits: List[float] = field(default_factory=list)
+    step_opp_prices: List[float] = field(default_factory=list)
+    
     def reset_episode(self):
         """Reset per-episode tracking."""
         self.step_profits = []
         self.step_prices = []
         self.step_market_shares = []
+
+        self.step_opp_profits=[]
+        self.step_opp_prices=[]
     
     def record_step(self, info: Dict):
         """Record metrics from a step."""
@@ -101,13 +113,21 @@ class TrainingMetrics:
         self.step_prices.append(info.get("price", 0.0))
         self.step_market_shares.append(info.get("market_share", 0.0))
     
+        self.step_opp_profits.append(info.get("opponent_profit", 0.0))
+        self.step_opp_prices.append(info.get("opponent_price", 0.0))
+
+
     def end_episode(self, total_reward: float):
         """Finalize episode metrics."""
         self.episode_rewards.append(total_reward)
         self.episode_profits.append(sum(self.step_profits))
-        self.episode_prices.append(np.mean(self.step_prices) if self.step_profits else 0.0)
-        self.episode_market_shares.append(np.mean(self.step_market_shares) if self.step_market_shares else 0.0)
+        self.episode_prices.append(float(np.mean(self.step_prices)) if self.step_prices else 0.0)
+        self.episode_market_shares.append(float(np.mean(self.step_market_shares)) if self.step_market_shares else 0.0)
 
+        self.episode_opp_profits.append(sum(self.step_opp_profits))
+        
+        self.episode_opp_prices.append(float(np.mean(self.step_opp_prices)) if self.step_opp_prices else 0.0)
+        
 
 # =============================================================================
 # TRAINING LOOP
@@ -137,7 +157,8 @@ def train_uniform_pricing(
         episode_length=config.episode_length,
         seed=config.seed,
     )
-    
+    assert env.observation_space.shape
+    assert env.action_space.shape
     # Get dimensions
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
@@ -241,8 +262,8 @@ def train_uniform_pricing(
         metrics.end_episode(episode_reward)
         
         if episode_critic_loss:
-            metrics.critic_losses.append(np.mean(episode_critic_loss))
-            metrics.actor_losses.append(np.mean(episode_actor_loss))
+            metrics.critic_losses.append(float(np.mean(episode_critic_loss)))
+            metrics.actor_losses.append(float(np.mean(episode_actor_loss)))
             metrics.alphas.append(agent.alpha)
         
         # =========================================
@@ -255,6 +276,9 @@ def train_uniform_pricing(
             if verbose:
                 avg_reward = np.mean(metrics.episode_rewards[-config.eval_freq:])
                 avg_price = np.mean(metrics.episode_prices[-config.eval_freq:])
+                
+                avg_opp_price = np.mean(metrics.episode_opp_prices[-config.eval_freq:])
+
                 avg_share = np.mean(metrics.episode_market_shares[-config.eval_freq:])
                 
                 print(f"Episode {episode + 1}/{config.num_episodes} | "
@@ -262,6 +286,7 @@ def train_uniform_pricing(
                       f"Eval: {eval_reward:.1f} | "
                       f"Price: { avg_price :.2f} | "
                       f"Share: {avg_share:.2f} | "
+                      f"Opponent Price: {avg_opp_price:.2f} | "
                       f"α: {agent.alpha:.4f}")
         
         # =========================================
@@ -341,8 +366,13 @@ def save_checkpoint(
     # Save metrics
     metrics_dict = {
         "episode_rewards": metrics.episode_rewards,
+        
         "episode_profits": metrics.episode_profits,
+        "episode_opponent_profits": metrics.episode_opp_profits,
+        
         "episode_prices": metrics.episode_prices,
+        "episode_opponent_prices": metrics.episode_opp_prices,
+        
         "episode_market_shares": metrics.episode_market_shares,
         "eval_rewards": metrics.eval_rewards,
         "critic_losses": metrics.critic_losses,
@@ -360,123 +390,101 @@ def save_checkpoint(
         json.dump(vars(config), f, indent=2)
 
 
+
 def plot_training_results(metrics: TrainingMetrics, config: TrainingConfig):
-    """Plot training results."""
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    
-    # Episode rewards
+    """Plot training results with an aesthetic, publication‑ready style."""
+    # Set style
+    plt.style.use('seaborn-v0_8-darkgrid')
+    sns.set_palette("viridis")
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+    fig.suptitle('Training Progress', fontsize=16, fontweight='bold', y=1.02)
+
+    # ---- 1. Episode rewards + opponent profits + moving average ----
     ax = axes[0, 0]
-    ax.plot(metrics.episode_rewards, alpha=0.6, label='Episode Reward')
+    episodes = range(1, len(metrics.episode_rewards) + 1)
+    ax.plot(episodes, metrics.episode_rewards, alpha=0.4, lw=1.5, label='Agent Reward')
+    ax.plot(episodes, metrics.episode_opp_profits, alpha=0.4, lw=1.5, label='Opponent Profit')
+    
     window = min(20, len(metrics.episode_rewards))
     if len(metrics.episode_rewards) >= window:
-        moving_avg = np.convolve(
-            metrics.episode_rewards,
-            np.ones(window) / window,
-            mode='valid'
-        )
-        ax.plot(range(window - 1, len(metrics.episode_rewards)),
-                moving_avg, 'r-', linewidth=2, label=f'{window}-Episode MA')
-    ax.set_xlabel('Episode')
-    ax.set_ylabel('Total Reward')
-    ax.set_title('Training Rewards')
-    ax.legend()
+        moving_avg = np.convolve(metrics.episode_rewards, np.ones(window)/window, mode='valid')
+        ax.plot(range(window, len(metrics.episode_rewards)+1), moving_avg, 
+                'r-', lw=2.5, label=f'{window}-ep MA')
+    ax.set_xlabel('Episode', fontsize=11)
+    ax.set_ylabel('Total Reward / Profit', fontsize=11)
+    ax.set_title('Rewards & Opponent Profit', fontsize=12)
+    ax.legend(loc='upper left', framealpha=0.9)
     ax.grid(True, alpha=0.3)
-    
-    # Evaluation rewards
+
+    # ---- 2. Evaluation rewards (scatter + line) ----
     ax = axes[0, 1]
-    eval_episodes = list(range(config.eval_freq, config.num_episodes + 1, config.eval_freq))
-    if len(eval_episodes) > len(metrics.eval_rewards):
-        eval_episodes = eval_episodes[:len(metrics.eval_rewards)]
-    ax.plot(eval_episodes, metrics.eval_rewards, 'go-', linewidth=2, markersize=4)
-    ax.set_xlabel('Episode')
-    ax.set_ylabel('Eval Reward')
-    ax.set_title('Evaluation Rewards')
+    eval_eps = list(range(config.eval_freq, config.num_episodes + 1, config.eval_freq))
+    if len(eval_eps) > len(metrics.eval_rewards):
+        eval_eps = eval_eps[:len(metrics.eval_rewards)]
+    ax.plot(eval_eps, metrics.eval_rewards, 's-', color='#2c7bb6', lw=2, markersize=6, 
+            markerfacecolor='white', markeredgewidth=1.5, label='Evaluation reward')
+    ax.set_xlabel('Episode', fontsize=11)
+    ax.set_ylabel('Eval Reward', fontsize=11)
+    ax.set_title('Evaluation Performance', fontsize=12)
     ax.grid(True, alpha=0.3)
-    
-    # Prices
+    ax.legend()
+
+    # ---- 3. Agent vs Opponent Prices ----
     ax = axes[0, 2]
-    actual_prices = [p 
-                     for p in metrics.episode_prices]
-    ax.plot(actual_prices, alpha=0.7)
-    ax.axhline(y=2.5, color='r', linestyle='--', label='Opponent Price')
-    ax.set_xlabel('Episode')
-    ax.set_ylabel('Price')
-    ax.set_title('Agent Price over Training')
+    ax.plot(episodes, metrics.episode_prices, label='Agent Price', lw=2, color='#1b9e77')
+    ax.plot(episodes, metrics.episode_opp_prices, label='Opponent Price', lw=2, color='#d95f02', linestyle='--')
+    ax.set_xlabel('Episode', fontsize=11)
+    ax.set_ylabel('Price', fontsize=11)
+    ax.set_title('Pricing Strategy', fontsize=12)
     ax.legend()
     ax.grid(True, alpha=0.3)
-    
-    # Market share
+
+    # ---- 4. Market share with 0.5 reference ----
     ax = axes[1, 0]
-    ax.plot(metrics.episode_market_shares, alpha=0.7)
-    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
-    ax.set_xlabel('Episode')
-    ax.set_ylabel('Market Share')
-    ax.set_title('Market Share over Training')
+    ax.fill_between(episodes, 0.5, metrics.episode_market_shares, 
+                    where=(np.array(metrics.episode_market_shares) >= 0.5), 
+                    color='green', alpha=0.2, interpolate=True)
+    ax.fill_between(episodes, 0.5, metrics.episode_market_shares, 
+                    where=(np.array(metrics.episode_market_shares) < 0.5), 
+                    color='red', alpha=0.2, interpolate=True)
+    ax.plot(episodes, metrics.episode_market_shares, 'k-', lw=2)
+    ax.axhline(y=0.5, color='gray', linestyle='--', lw=1.5, alpha=0.7)
+    ax.set_xlabel('Episode', fontsize=11)
+    ax.set_ylabel('Market Share', fontsize=11)
+    ax.set_title('Market Share (above 0.5 = advantage)', fontsize=12)
     ax.grid(True, alpha=0.3)
-    
-    # Losses
+    # Annotate final share
+    final_share = metrics.episode_market_shares[-1] if metrics.episode_market_shares else 0.5
+    ax.annotate(f'Final: {final_share:.2f}', xy=(episodes[-1], final_share), 
+                xytext=(-30, 10), textcoords='offset points', fontsize=9,
+                arrowprops=dict(arrowstyle='->', color='gray'))
+
+    # ---- 5. Losses (smoothed if long) ----
     ax = axes[1, 1]
     if metrics.critic_losses:
-        ax.plot(metrics.critic_losses, label='Critic Loss', alpha=0.7)
-        ax.plot(metrics.actor_losses, label='Actor Loss', alpha=0.7)
-    ax.set_xlabel('Episode')
-    ax.set_ylabel('Loss')
-    ax.set_title('Training Losses')
+        # optional smoothing for readability
+        loss_eps = range(1, len(metrics.critic_losses) + 1)
+        ax.plot(loss_eps, metrics.critic_losses, label='Critic Loss', alpha=0.6, lw=1.2)
+        ax.plot(loss_eps, metrics.actor_losses, label='Actor Loss', alpha=0.6, lw=1.2)
+        ax.set_yscale('log')  # losses often span orders of magnitude
+    ax.set_xlabel('Episode', fontsize=11)
+    ax.set_ylabel('Loss (log scale)', fontsize=11)
+    ax.set_title('Training Losses', fontsize=12)
     ax.legend()
     ax.grid(True, alpha=0.3)
-    
-    # Alpha
+
+    # ---- 6. Entropy coefficient α ----
     ax = axes[1, 2]
     if metrics.alphas:
-        ax.plot(metrics.alphas, 'purple', linewidth=2)
-    ax.set_xlabel('Episode')
-    ax.set_ylabel('Alpha')
-    ax.set_title('Entropy Coefficient')
+        alpha_eps = range(1, len(metrics.alphas) + 1)
+        ax.plot(alpha_eps, metrics.alphas, color='purple', lw=2.5)
+        ax.fill_between(alpha_eps, 0, metrics.alphas, alpha=0.2, color='purple')
+    ax.set_xlabel('Episode', fontsize=11)
+    ax.set_ylabel('α', fontsize=11)
+    ax.set_title('Entropy Coefficient', fontsize=12)
     ax.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
-    
-    # Save plot
     os.makedirs(config.save_dir, exist_ok=True)
-    plt.savefig(os.path.join(config.save_dir, 'training_results.png'), dpi=150)
+    plt.savefig(os.path.join(config.save_dir, 'training_results.png'), dpi=150, bbox_inches='tight')
     plt.show()
-
-
-# =============================================================================
-# MAIN
-# =============================================================================
-
-def main():
-    """Run Phase 2.1 training."""
-    # Create configuration
-    config = TrainingConfig(
-        num_episodes=300,
-        warmup_steps=1000,
-        eval_freq=10,
-        save_freq=100,
-        opponent_type="reactive_uniform",  # Fixed opponent at price 2.5
-        seed=42,
-    )
-    
-    # Train agent
-    agent, metrics = train_uniform_pricing(config, verbose=True)
-    
-    # Plot results
-    print("\n" + "=" * 60)
-    print("TRAINING COMPLETE")
-    print("=" * 60)
-    
-    # Final statistics
-    print(f"\nFinal 50 episodes:")
-    print(f"  Avg Reward: {np.mean(metrics.episode_rewards[-50:]):.2f}")
-    print(f"  Avg Price: {np.mean(metrics.episode_prices[-50:]):.2f}")
-    print(f"  Avg Market Share: {np.mean(metrics.episode_market_shares[-50:]):.2f}")
-    
-    # Plot
-    plot_training_results(metrics, config)
-    
-    print(f"\nResults saved to: {config.save_dir}")
-
-
-if __name__ == "__main__":
-    main()

@@ -473,8 +473,9 @@ class RuleBasedOpponentPolicy(OpponentPolicy):
         
         price_new = self.bounds.clip_bbp_new(price_new)
         price_old = self.bounds.clip_bbp_old(price_old)
+        price_old = max(price_old, price_new)
         
-        # Enforce constraint: price_old >= price_newimport numpy as np
+        return price_new, price_old
 
 class RandomizedRuleBasedOpponentPolicy(RuleBasedOpponentPolicy):
     """
