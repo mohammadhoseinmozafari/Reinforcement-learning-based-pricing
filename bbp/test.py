@@ -5,7 +5,7 @@ Tests basic functionality of Consumer, Firm, and Market classes.
 """
 
 import numpy as np
-from env.models.market import HotellingMarket
+from env.target_system import HotellingMarket
 from env.modules import Firm , Consumer
 from config.constants import NUM_CONSUMERS, DEBUG_MODE
 

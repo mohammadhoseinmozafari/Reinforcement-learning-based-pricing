@@ -6,7 +6,7 @@ import numpy as np
 import streamlit as st
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from env.models.market import HotellingMarket
+from env.target_system import HotellingMarket
 
 # Page config
 st.set_page_config(
