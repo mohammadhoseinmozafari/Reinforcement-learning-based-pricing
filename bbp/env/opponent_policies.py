@@ -555,6 +555,11 @@ class RandomizedRuleBasedOpponentPolicy(RuleBasedOpponentPolicy):
 
         # Call parent reset to reseed the RNG if needed (but we already handled seed)
         super().reset(seed=seed)
+    def __repr__(self) -> str:
+        return (f"{self.__class__.__name__}(regime={self.regime})"
+                f"(uniform range= {self.base_uniform_range})"
+                f"(market share sensitivity= {self.market_share_sensitivity})"
+                f"(price step = {self.price_step})")
 
 
 # =============================================================================
@@ -637,15 +642,36 @@ OPPONENT_PRESETS = {
         "market_share_sensitivity": 1.0,
         "price_step": 1.0,
     },
-    
-    "random_reactive_uniform":{
+
+    "agressive_random_reactive_uniform":{
         "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(0.5, 5.0),
+        "base_uniform_range" :(0.5, 2.0),
         "base_price_new_factor": 0.8,          # new price = factor * base_uniform
         "base_price_old_factor" :1.2,          # old price = factor * base_uniform
         "regime":0,
-        "market_share_sensitivity" :1.0,
-        "price_step" :1.0,
+        "sensitivity_range" :(0.6 ,1.0),
+        "step_range" :(0,0.5),
+    },
+
+    "passive_random_reactive_uniform":{
+        "policy_type" : "randomized_rule_based",
+        "base_uniform_range" :(2.0, 3.5),
+        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
+        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
+        "regime":0,
+        "sensitivity_range" :(0.3, 0.6),
+        "step_range" :(0,0.5),
+    },
+
+
+    "premium_random_reactive_uniform":{
+        "policy_type" : "randomized_rule_based",
+        "base_uniform_range" :(3.5, 5.0),
+        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
+        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
+        "regime":0,
+        "sensitivity_range" :(0.0, 0.3),
+        "step_range" :(0,0.5),
     },
 
     "reactive_bbp": {

@@ -30,7 +30,8 @@ from config.constants import (
     PRICE_UNIFORM_MIN,
     PRICE_UNIFORM_MAX,
 )
-
+from models.reward_normalizer import EpisodeRewardNormalizer
+import gymnasium as gym
 
 # =============================================================================
 # TRAINING CONFIGURATION
@@ -46,17 +47,17 @@ class TrainingConfig:
     
     # SAC hyperparameters
     hidden_dim: int = 256
-    lr_actor: float = 3e-4
+    lr_actor: float = 1e-4
     lr_critic: float = 3e-4
     lr_alpha: float = 3e-4
     gamma: float = 0.99
     tau: float = 0.005
     auto_alpha: bool = True
-    buffer_size: int = 100000
+    buffer_size: int = 200000
     batch_size: int = 256
     
     # Training
-    num_episodes: int = 500
+    num_episodes: int = 1000
     warmup_steps: int = 1000
     updates_per_step: int = 1
     eval_freq: int = 10
@@ -151,12 +152,13 @@ def train_uniform_pricing(
     np.random.seed(config.seed)
     
     # Create environment
-    env = make_uniform_pricing_env(
+    base_env = make_uniform_pricing_env(
         opponent=config.opponent_type,
         num_consumers=config.num_consumers,
         episode_length=config.episode_length,
         seed=config.seed,
     )
+    env = EpisodeRewardNormalizer(base_env)
     assert env.observation_space.shape
     assert env.action_space.shape
     # Get dimensions
@@ -220,8 +222,10 @@ def train_uniform_pricing(
     # =========================================
     if verbose:
         print("Starting training...\n")
-    
-    for episode in range(config.num_episodes):
+    num_episodes = config.num_episodes
+    for episode in range(num_episodes):
+        if episode ==  150:
+            pass
         state, _ = env.reset()
         metrics.reset_episode()
         
@@ -232,14 +236,10 @@ def train_uniform_pricing(
         for step in range(config.episode_length):
             # Select action from policy
             action = agent.select_action(state)
-            
-            # Clip action to valid range (safety)
-            action = np.clip(action, 0.0, 1.0)
-            
+                        
             # Environment step
             next_state, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            
             # Store transition
             agent.replay_buffer.push(state, action, reward, next_state, done)
             
@@ -257,6 +257,7 @@ def train_uniform_pricing(
             
             if done:
                 break
+        
         
         # End episode
         metrics.end_episode(episode_reward)
@@ -303,7 +304,7 @@ def train_uniform_pricing(
 
 
 def evaluate_agent(
-    env: UniformPricingEnv,
+    env: gym.Env,
     agent: SAC,
     num_episodes: int,
     max_steps: int
@@ -463,9 +464,8 @@ def plot_training_results(metrics: TrainingMetrics, config: TrainingConfig):
     ax = axes[1, 1]
     if metrics.critic_losses:
         # optional smoothing for readability
-        loss_eps = range(1, len(metrics.critic_losses) + 1)
-        ax.plot(loss_eps, metrics.critic_losses, label='Critic Loss', alpha=0.6, lw=1.2)
-        ax.plot(loss_eps, metrics.actor_losses, label='Actor Loss', alpha=0.6, lw=1.2)
+        ax.plot(metrics.critic_losses, label='Critic Loss', alpha=0.6, lw=1.2)
+        ax.plot( metrics.actor_losses, label='Actor Loss', alpha=0.6, lw=1.2)
         ax.set_yscale('log')  # losses often span orders of magnitude
     ax.set_xlabel('Episode', fontsize=11)
     ax.set_ylabel('Loss (log scale)', fontsize=11)

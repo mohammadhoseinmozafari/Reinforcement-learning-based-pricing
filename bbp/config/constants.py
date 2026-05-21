@@ -9,7 +9,7 @@ Unified configuration for economic model and RL environment.
 # =============================================================================
 
 NUM_CONSUMERS = 50
-EPISODE_LENGTH = 300
+EPISODE_LENGTH = 100
 
 # Hotelling line
 HOTELLING_LEFT = 0.0
@@ -107,7 +107,7 @@ TOTAL_OBS_PC_DIM = (
 # HISTORY TRACKING
 # =============================================================================
 
-MAX_HISTORY_LENGTH = 200  # Max periods to track for trends
+MAX_HISTORY_LENGTH = 100  # Max periods to track for trends
 
 # =============================================================================
 # AGENT IDs

@@ -34,11 +34,6 @@ from config.constants import (
     
 )
 
-from config.constants import (
-    MAX_HISTORY_LENGTH,
-    MARGINAL_COST,
-    MAX_HISTORY_LENGTH
-)
 # =============================================================================
 # CONSUMER CLASS
 # =============================================================================
@@ -558,11 +553,11 @@ class Firm:
         
         Returns value in [-1, 1] indicating profit direction.
         """
-        if len(self.profit_history) < 4:
+        if len(self.profit_history) < 10:
             return 0.0
         
-        recent = np.mean(self.profit_history[-2:])
-        earlier = np.mean(self.profit_history[-4:-2])
+        recent = np.mean(self.profit_history[-5:])
+        earlier = np.mean(self.profit_history[-10:-5])
         
         if earlier == 0:
             return 0.0 if recent == 0 else 1.0

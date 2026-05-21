@@ -8,11 +8,11 @@ def main():
     """Run Phase 2.1 training."""
     # Create configuration
     config = TrainingConfig(
-        num_episodes=300,
+        num_episodes=200,
         warmup_steps=1000,
         eval_freq=10,
         save_freq=100,
-        opponent_type="random_reactive_uniform",  # Fixed opponent at price 2.5
+        opponent_type="agressive_random_reactive_uniform",  
         seed=42,
     )
     

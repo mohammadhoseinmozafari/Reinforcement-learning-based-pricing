@@ -212,6 +212,7 @@ class UniformPricingEnv(gym.Env):
     
     def reset(
         self,
+        *,
         seed: Optional[int] = None,
         options: Optional[Dict] = None
     ) -> Tuple[np.ndarray, Dict]:
@@ -373,6 +374,7 @@ def make_uniform_pricing_env(
         opponent_policy = opponent
         opponent_policy.regime = 0
     
+    print(f'Training is initialized with opponent police: {opponent_policy}')
     return UniformPricingEnv(
         opponent_policy=opponent_policy,
         **env_kwargs
