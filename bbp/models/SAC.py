@@ -20,16 +20,35 @@ import random
 class ReplayBuffer:
     """Experience Replay Buffer for off-policy learning."""
     
-    def __init__(self, capacity: int):
+    def __init__(self, capacity: int, recent_bias: float = 0.3):
         self.buffer = deque(maxlen=capacity)
+        self.insertion_order = deque(maxlen=capacity)  # Track insertion time
+        self.total_insertions = 0
+        self.recent_bias = recent_bias  
     
     def push(self, state, action, reward, next_state, done):
-        """Store a transition in the buffer."""
+        """Store a transition in the buffer."""     
         self.buffer.append((state, action, reward, next_state, done))
+        self.insertion_order.append(self.total_insertions)
+        self.total_insertions+=1
     
     def sample(self, batch_size: int):
         """Sample a batch of transitions."""
-        batch = random.sample(self.buffer, batch_size)
+        if len(self.buffer)< batch_size:
+            return self._sample_uniform(batch_size)
+        
+        insertion_times = np.array(self.insertion_order)
+        max_time = insertion_times.max()
+        time_diffs = max_time- insertion_times
+        weights = np.exp(-self.recent_bias*time_diffs / len(self.buffer))
+        weights = weights/weights.sum()
+
+        indices = np.random.choice(len(self.buffer),
+                                   size = batch_size,
+                                   p = weights,
+                                   replace=False)
+        
+        batch = [self.buffer[i] for i in indices]
         states, actions, rewards, next_states, dones = zip(*batch)
         
         return (
@@ -40,6 +59,18 @@ class ReplayBuffer:
             np.array(dones, dtype=np.float32)
         )
     
+    def _sample_uniform(self, batch_size) :
+            batch = random.sample(self.buffer, batch_size)
+            states, actions, rewards, next_states, dones = zip(*batch)
+        
+            return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards, dtype=np.float32),
+            np.array(next_states),
+            np.array(dones, dtype=np.float32)
+        )
+
     def __len__(self):
         return len(self.buffer)
 
@@ -55,7 +86,7 @@ class Actor(nn.Module):
         state_dim: int,
         action_dim: int,
         hidden_dim: int = 256,
-        log_std_min: float = -20,
+        log_std_min: float = -10,
         log_std_max: float = 2
     ):
         super(Actor, self).__init__()
@@ -222,6 +253,7 @@ class SAC:
         auto_alpha: bool = True,
         target_entropy: Optional[float] = None,
         buffer_size: int = 1000000,
+        grad_clip_norm : float = 1.0,
         batch_size: int = 256,
         device: Optional[str] = None
     ):
@@ -232,7 +264,7 @@ class SAC:
         self.tau = tau
         self.batch_size = batch_size
         self.auto_alpha = auto_alpha
-        
+        self.grad_clip_norm = grad_clip_norm
         # Set device
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -325,6 +357,7 @@ class SAC:
         
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        # torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_norm)
         self.critic_optimizer.step()
         
         # Update actor
@@ -336,6 +369,7 @@ class SAC:
         
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        # torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_norm)
         self.actor_optimizer.step()
         
         # Update alpha (entropy coefficient)
@@ -345,6 +379,7 @@ class SAC:
             
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
+            # torch.nn.utils.clip_grad_norm_([self.log_alpha], self.grad_clip_norm)
             self.alpha_optimizer.step()
             
             self.alpha = self.log_alpha.exp().item()
@@ -547,22 +582,4 @@ def evaluate(env, agent: SAC, num_episodes: int = 5, max_steps: int = 200):
     
     return total_reward / num_episodes
 
-
-if __name__ == "__main__":
-    # Quick test
-    
-    env = gym.make("Pendulum-v1")
-    
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    action_scale = env.action_space.high[0]
-    
-    agent = SAC(
-        state_dim=state_dim,
-        action_dim=action_dim,
-        action_scale=action_scale
-    )
-    
-    print(f"SAC Agent initialized")
-    print(f"State dim: {state_dim}, Action dim: {action_dim}, Action scale: {action_scale}")
-    print(f"Device: {agent.device}")
+ 
