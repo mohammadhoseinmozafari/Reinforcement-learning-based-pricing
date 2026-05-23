@@ -18,7 +18,7 @@ Features:
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, List,  Tuple
+from typing import Dict, List, SupportsFloat,  Tuple
 from dataclasses import dataclass, field
 import json
 import os
@@ -223,7 +223,7 @@ def train_uniform_pricing(
         state, _ = env.reset()
         metrics.reset_episode()
         
-        episode_reward = 0
+        episode_reward: float = 0.0
         episode_critic_loss = []
         episode_actor_loss = []
    
@@ -247,7 +247,8 @@ def train_uniform_pricing(
             
             # Track metrics
             metrics.record_step(info)
-            episode_reward += reward
+    
+            episode_reward += float(reward)
             state = next_state
             
             if done:
@@ -329,7 +330,7 @@ def evaluate_agent(
             action = np.clip(action, 0.0, 1.0)
             
             next_state, reward, terminated, truncated, _ = env.step(action)
-            episode_reward += reward
+            episode_reward += float(reward)
             state = next_state
             
             if terminated or truncated:

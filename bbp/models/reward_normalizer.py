@@ -1,3 +1,5 @@
+from typing import SupportsFloat
+
 import gymnasium as gym
 import numpy as np
 from collections import deque
@@ -31,12 +33,12 @@ class EpisodeRewardNormalizer(gym.Wrapper):
         # For running statistics within episode
         
         self.episode_rewards = []
-        self.reward_mean = 0.0
-        self.reward_std = 1.0
-        self.step_count = 0
+        self.reward_mean :float = 0.0
+        self.reward_std  :float = 1.0
+        self.step_count : float = 0
         
         # For log-based normalization
-        self.log_scale = 1.0
+        self.log_scale  = 1.0
         
     def reset(self, **kwargs):
         """Reset episode-level statistics."""
@@ -44,7 +46,7 @@ class EpisodeRewardNormalizer(gym.Wrapper):
         
         # Reset episode statistics
         self.episode_rewards = []
-        self.reward_mean = 0.0
+        self.reward_mean : float = 0.0
         self.reward_std = 1.0
         self.step_count = 0
         self.log_scale = 1.0
@@ -75,13 +77,14 @@ class EpisodeRewardNormalizer(gym.Wrapper):
         
         return obs, normalized_reward, terminated, truncated, info
     
-    def _normalize_running(self, reward):
+    def _normalize_running(self, reward : SupportsFloat) -> SupportsFloat:
         """
         Normalize using running statistics within the episode.
         
         This is like batch normalization but within a single episode.
         Early in the episode, normalization is noisy but improves over time.
         """
+        reward = float(reward)
         self.step_count += 1
         self.episode_rewards.append(reward)
         
@@ -112,11 +115,11 @@ class EpisodeRewardNormalizer(gym.Wrapper):
             normalized = reward - self.reward_mean
         
         # Clip to prevent extreme values
-        normalized = np.clip(normalized, -self.clip_range, self.clip_range)
+        normalized  = float(np.clip(normalized, -self.clip_range, self.clip_range))
         
         return normalized
     
-    def _normalize_log(self, reward):
+    def _normalize_log(self, reward: SupportsFloat) -> SupportsFloat:
         """
         Normalize using symmetric log transform.
         
@@ -130,6 +133,7 @@ class EpisodeRewardNormalizer(gym.Wrapper):
         It's a soft compression that works for any scale.
         """
         # Symmetric log transform
+        reward = float(reward)
         sign = np.sign(reward)
         magnitude = np.log1p(np.abs(reward))  # log(1 + |x|)
         
@@ -137,19 +141,20 @@ class EpisodeRewardNormalizer(gym.Wrapper):
         normalized = sign * magnitude
         
         # Clip just in case
-        normalized = np.clip(normalized, -self.clip_range, self.clip_range)
+        normalized = float(np.clip(normalized, -self.clip_range, self.clip_range))
         
         return normalized
     
-    def _normalize_both(self, reward):
+    def _normalize_both(self, reward: SupportsFloat) -> SupportsFloat:
         """
         Combine log transform with running normalization.
         
         First compress with log, then normalize to zero mean unit variance.
         This is the most robust approach used in state-of-the-art systems.
         """
+        reward = float(reward)
         # Step 1: Log compress to handle extreme scales
-        log_reward = self._normalize_log(reward)
+        log_reward = float(self._normalize_log(reward))
         
         # Step 2: Running normalization on log-compressed rewards
         self.step_count += 1
@@ -171,7 +176,7 @@ class EpisodeRewardNormalizer(gym.Wrapper):
         else:
             normalized = log_reward - self.reward_mean
         
-        normalized = np.clip(normalized, -self.clip_range, self.clip_range)
+        normalized = float(np.clip(normalized, -self.clip_range, self.clip_range))
         
         return normalized
 
