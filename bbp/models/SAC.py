@@ -5,7 +5,7 @@ by Haarnoja et al. (2018)
 """
 import gymnasium as gym
 
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -255,6 +255,8 @@ class SAC:
         buffer_size: int = 1000000,
         grad_clip_norm : float = 1.0,
         batch_size: int = 256,
+        lr_scheduler : Optional[str] = 'step',
+        lr_scheduler_kwargs: Optional[Dict] = None,
         device: Optional[str] = None
     ):
         self.state_dim = state_dim
@@ -265,6 +267,7 @@ class SAC:
         self.batch_size = batch_size
         self.auto_alpha = auto_alpha
         self.grad_clip_norm = grad_clip_norm
+        self.lr_scheduler_type = lr_scheduler
         # Set device
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -283,6 +286,8 @@ class SAC:
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=lr_actor)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=lr_critic)
         
+
+
         # Entropy coefficient (alpha)
         if auto_alpha:
             # Target entropy is -dim(A) by default
@@ -294,12 +299,64 @@ class SAC:
             self.alpha = alpha
             self.log_alpha = None
             self.alpha_optimizer = None
+
         
+        # Learning rate schedulers
+        print("Initializing Schedulers")
+        self.actor_scheduler = self._create_scheduler(
+            self.actor_optimizer, lr_scheduler, lr_scheduler_kwargs
+        )
+        self.critic_scheduler = self._create_scheduler(
+            self.critic_optimizer, lr_scheduler, lr_scheduler_kwargs
+        )
+        self.alpha_scheduler = self._create_scheduler(
+            self.alpha_optimizer, lr_scheduler, lr_scheduler_kwargs
+        ) if self.alpha_optimizer is not None else None
+        
+        assert self.actor_scheduler and self.critic_scheduler and self.alpha_scheduler
+
         # Replay buffer
         self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Training info
         self.total_steps = 0
+
+    def _create_scheduler(
+        self, 
+        optimizer: Optional[optim.Optimizer], 
+        scheduler_type: Optional[str],
+        kwargs: Optional[Dict]
+    ):
+        """Create a learning rate scheduler."""
+        if optimizer is None or scheduler_type is None:
+            return None
+        
+        kwargs = kwargs or {}
+        
+        if scheduler_type == "cosine":
+            # Cosine annealing: smoothly decreases LR following cosine curve
+            return optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=kwargs.get("T_max", 5000),      # Number of steps for one cycle
+                eta_min=kwargs.get("eta_min", 1e-6)      # Minimum LR
+            )
+        
+        elif scheduler_type == "step":
+            # Step decay: reduces LR by gamma every step_size steps
+            return optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=kwargs.get("step_size", 20000),
+                gamma=kwargs.get("step_gamma", 0.5)
+            )
+        
+        elif scheduler_type == "exponential":
+            # Exponential decay: multiplies LR by gamma every step
+            return optim.lr_scheduler.ExponentialLR(
+                optimizer,
+                gamma=kwargs.get("exp_gamma", 0.9999)
+            )
+  
+        return None
     
     def select_action(self, state, deterministic=False):
         """
@@ -385,6 +442,7 @@ class SAC:
             self.alpha = self.log_alpha.exp().item()
         
         # Soft update target networks
+        self._step_schedulers()
         self._soft_update()
         
         self.total_steps += 1
@@ -397,10 +455,31 @@ class SAC:
             'q_value': q_new.mean().item()
         }
     
+    def _step_schedulers(self):
+        """Step all schedulers (except ReduceLROnPlateau which needs a metric)."""
+        if self.actor_scheduler is not None :
+            self.actor_scheduler.step()
+        
+        if self.critic_scheduler is not None :
+            self.critic_scheduler.step()
+        
+        if self.alpha_scheduler is not None :
+            self.alpha_scheduler.step()
+    
     def _soft_update(self):
         """Soft update target networks."""
         for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+    
+    def get_current_lrs(self) -> Dict[str, float]:
+        """Get current learning rates."""
+        lrs = {
+            'actor_lr': self.actor_optimizer.param_groups[0]['lr'],
+            'critic_lr': self.critic_optimizer.param_groups[0]['lr']
+        }
+        if self.alpha_optimizer is not None:
+            lrs['alpha_lr'] = self.alpha_optimizer.param_groups[0]['lr']
+        return lrs
     
     def save(self, path: str):
         """Save model checkpoint."""

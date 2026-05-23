@@ -1,11 +1,9 @@
-import sys
-import os
+
 import time
 import pandas as pd
 import streamlit as st
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from env.target_system import HotellingMarket
+from env.models import HotellingMarket
 
 # Page config
 st.set_page_config(

@@ -23,13 +23,9 @@ from dataclasses import dataclass, field
 import json
 import os
 
-from env.uniform_pricing_env import UniformPricingEnv, make_uniform_pricing_env
+from env.uniform_pricing_env import  make_uniform_pricing_env
 from models.SAC import SAC
-from config.constants import (
-    EPISODE_LENGTH,
-    PRICE_UNIFORM_MIN,
-    PRICE_UNIFORM_MAX,
-)
+from config.constants import    EPISODE_LENGTH
 from models.reward_normalizer import EpisodeRewardNormalizer
 import gymnasium as gym
 
@@ -41,7 +37,7 @@ import gymnasium as gym
 class TrainingConfig:
     """Configuration for Phase 2.1 training."""
     # Environment
-    num_consumers: int = 50
+    num_consumers: int = 100
     episode_length: int = EPISODE_LENGTH
     opponent_type: str = "random_reactive_uniform"
     
@@ -53,7 +49,7 @@ class TrainingConfig:
     gamma: float = 0.99
     tau: float = 0.005
     auto_alpha: bool = True
-    buffer_size: int = 200000
+    buffer_size: int = 100000
     batch_size: int = 256
     
     # Training
@@ -224,17 +220,15 @@ def train_uniform_pricing(
         print("Starting training...\n")
     num_episodes = config.num_episodes
     for episode in range(num_episodes):
-        if episode ==  150:
-            pass
         state, _ = env.reset()
         metrics.reset_episode()
         
         episode_reward = 0
         episode_critic_loss = []
         episode_actor_loss = []
-        
+   
         for step in range(config.episode_length):
-            # Select action from policy
+
             action = agent.select_action(state)
                         
             # Environment step
@@ -242,7 +236,8 @@ def train_uniform_pricing(
             done = terminated or truncated
             # Store transition
             agent.replay_buffer.push(state, action, reward, next_state, done)
-            
+           
+               
             # Update agent
             for _ in range(config.updates_per_step):
                 update_metrics = agent.update()
@@ -281,14 +276,15 @@ def train_uniform_pricing(
                 avg_opp_price = np.mean(metrics.episode_opp_prices[-config.eval_freq:])
 
                 avg_share = np.mean(metrics.episode_market_shares[-config.eval_freq:])
-                
+                lrs = agent.get_current_lrs()
                 print(f"Episode {episode + 1}/{config.num_episodes} | "
                       f"Avg Reward: {avg_reward:.1f} | "
                       f"Eval: {eval_reward:.1f} | "
                       f"Price: { avg_price :.2f} | "
                       f"Share: {avg_share:.2f} | "
                       f"Opponent Price: {avg_opp_price:.2f} | "
-                      f"α: {agent.alpha:.4f}")
+                      f"α: {agent.alpha:.4f} | " 
+                      f"LR: {lrs['actor_lr']:.2e}")
         
         # =========================================
         # SAVE CHECKPOINT
@@ -298,7 +294,7 @@ def train_uniform_pricing(
     
     # Final save
     save_checkpoint(agent, metrics, config, config.num_episodes, final=True)
-    
+  
     env.close()
     return agent, metrics
 

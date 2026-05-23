@@ -1,5 +1,5 @@
 import numpy as np
-from experiments.uniform_training.uniform_training import TrainingConfig, plot_training_results, train_uniform_pricing, plot_training_results
+from train.uniform_training.uniform_training import TrainingConfig, plot_training_results, train_uniform_pricing, plot_training_results
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -8,11 +8,11 @@ def main():
     """Run Phase 2.1 training."""
     # Create configuration
     config = TrainingConfig(
-        num_episodes=200,
+        num_episodes=1000,
         warmup_steps=1000,
         eval_freq=10,
         save_freq=100,
-        opponent_type="agressive_random_reactive_uniform",  
+        opponent_type="premium_uniform",  
         seed=42,
     )
     
