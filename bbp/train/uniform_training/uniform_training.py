@@ -18,115 +18,18 @@ Features:
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, List,  Tuple
-from dataclasses import dataclass, field
+from typing import  Tuple
 import json
 import os
 
 from env.uniform_pricing_env import  make_uniform_pricing_env
 from models.SAC import SAC
-from config.constants import    EPISODE_LENGTH, NUM_CONSUMERS
 from models.reward_normalizer import EpisodeRewardNormalizer
 import gymnasium as gym
 
+from train.config import TrainingConfig
+from train.metrics import TrainingMetrics
 
-
-# =============================================================================
-# TRAINING CONFIGURATION
-# =============================================================================
-
-@dataclass
-class TrainingConfig:
-    """Configuration for Phase 2.1 training."""
-    # Environment
-    num_consumers: int = NUM_CONSUMERS
-    episode_length: int = EPISODE_LENGTH
-    opponent_type: str = "random_reactive_uniform"
-    
-    # SAC hyperparameters
-    hidden_dim: int = 256
-    lr_actor: float = 1e-4
-    lr_critic: float = 3e-4
-    lr_alpha: float = 3e-4
-    gamma: float = 0.99
-    tau: float = 0.005
-    auto_alpha: bool = True
-    buffer_size: int = 100000
-    batch_size: int = 256
-    
-    # Training
-    num_episodes: int = 1000
-    warmup_steps: int = 1000
-    updates_per_step: int = 1
-    eval_freq: int = 10
-    eval_episodes: int = 5
-    
-    # Logging
-    log_freq: int = 1  # Log every N episodes
-    save_freq: int = 100  # Save model every N episodes
-    
-    # Reproducibility
-    seed: int = 42
-    
-    # Paths
-    save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"
-
-
-@dataclass
-class TrainingMetrics:
-    """Metrics tracked during training."""
-    episode_rewards: List[float] = field(default_factory=list)
-
-    episode_profits: List[float] = field(default_factory=list)
-    episode_opp_profits: List[float] = field(default_factory=list)
-
-    episode_prices: List[float] = field(default_factory=list)
-    episode_opp_prices: List[float] = field(default_factory=list)
-
-    episode_market_shares: List[float] = field(default_factory=list)
-    eval_rewards: List[float] = field(default_factory=list)
-    critic_losses: List[float] = field(default_factory=list)
-    actor_losses: List[float] = field(default_factory=list)
-    alphas: List[float] = field(default_factory=list)
-    
-    # Per-step tracking (for current episode)
-    step_profits: List[float] = field(default_factory=list)
-    step_prices: List[float] = field(default_factory=list)
-    step_market_shares: List[float] = field(default_factory=list)
-    
-    step_opp_profits: List[float] = field(default_factory=list)
-    step_opp_prices: List[float] = field(default_factory=list)
-    
-    def reset_episode(self):
-        """Reset per-episode tracking."""
-        self.step_profits = []
-        self.step_prices = []
-        self.step_market_shares = []
-
-        self.step_opp_profits=[]
-        self.step_opp_prices=[]
-    
-    def record_step(self, info: Dict):
-        """Record metrics from a step."""
-        self.step_profits.append(info.get("profit", 0.0))
-        self.step_prices.append(info.get("price", 0.0))
-        self.step_market_shares.append(info.get("market_share", 0.0))
-    
-        self.step_opp_profits.append(info.get("opponent_profit", 0.0))
-        self.step_opp_prices.append(info.get("opponent_price", 0.0))
-
-
-    def end_episode(self, total_reward: float):
-        """Finalize episode metrics."""
-        self.episode_rewards.append(total_reward)
-        self.episode_profits.append(sum(self.step_profits))
-        self.episode_prices.append(float(np.mean(self.step_prices)) if self.step_prices else 0.0)
-        self.episode_market_shares.append(float(np.mean(self.step_market_shares)) if self.step_market_shares else 0.0)
-
-        self.episode_opp_profits.append(sum(self.step_opp_profits))
-        
-        self.episode_opp_prices.append(float(np.mean(self.step_opp_prices)) if self.step_opp_prices else 0.0)
-        
 
 # =============================================================================
 # TRAINING LOOP

@@ -118,8 +118,8 @@ class OpponentCurriculumScheduler:
     def progress(self) -> float:
         """Overall curriculum progress [0, 1]."""
         return self.current_stage_idx / max(len(self.config.stages) - 1, 1)
-    
-    def get_current_opponent(self) -> str:
+    @property
+    def current_opponent(self) -> str:
         """Get opponent type for current stage."""
         return self.current_stage.opponent_type
     
@@ -291,6 +291,7 @@ class OpponentCurriculumScheduler:
     
     def get_info(self) -> Dict:
         """Get current curriculum state for logging."""
+        all_stable, status = self._is_all_stable() if len(self.critic_losses) >= self.config.window_size else (False, {})
         return {
             "stage_idx": self.current_stage_idx,
             "stage_name": self.current_stage.name,
@@ -301,6 +302,7 @@ class OpponentCurriculumScheduler:
             "total_episodes": self.total_episodes,
             "progress": self.progress,
             "is_last_stage": self.is_last_stage,
+            "convergence_status": {k: v for k, v in status.items()},
             "recent_avg_reward": np.mean(self.recent_eval_rewards) if self.recent_eval_rewards else 0.0,
         }
     
