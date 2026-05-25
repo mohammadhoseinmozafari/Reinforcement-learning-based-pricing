@@ -18,16 +18,18 @@ Features:
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, List, SupportsFloat,  Tuple
+from typing import Dict, List,  Tuple
 from dataclasses import dataclass, field
 import json
 import os
 
 from env.uniform_pricing_env import  make_uniform_pricing_env
 from models.SAC import SAC
-from config.constants import    EPISODE_LENGTH
+from config.constants import    EPISODE_LENGTH, NUM_CONSUMERS
 from models.reward_normalizer import EpisodeRewardNormalizer
 import gymnasium as gym
+
+
 
 # =============================================================================
 # TRAINING CONFIGURATION
@@ -37,7 +39,7 @@ import gymnasium as gym
 class TrainingConfig:
     """Configuration for Phase 2.1 training."""
     # Environment
-    num_consumers: int = 100
+    num_consumers: int = NUM_CONSUMERS
     episode_length: int = EPISODE_LENGTH
     opponent_type: str = "random_reactive_uniform"
     
