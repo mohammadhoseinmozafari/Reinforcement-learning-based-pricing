@@ -605,6 +605,13 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+     "premium_uniform": {
+        "policy_type": "constant",
+        "uniform_price": 4.0,
+        "price_new": 3.0,
+        "price_old": 4.5,
+        "regime": 0,
+    },
     "passive_uniform": {
         "policy_type": "constant",
         "uniform_price": 2.5,
@@ -612,13 +619,7 @@ OPPONENT_PRESETS = {
         "price_old": 3.0,
         "regime": 0,
     },
-    "passive_bbp": {
-        "policy_type": "constant",
-        "uniform_price": 2.5,
-        "price_new": 1.8,
-        "price_old": 3.2,
-        "regime": 1,
-    },
+
     "aggressive_uniform": {
         "policy_type": "constant",
         "uniform_price": 1.5,
@@ -626,30 +627,14 @@ OPPONENT_PRESETS = {
         "price_old": 2.0,
         "regime": 0,
     },
-    "premium_uniform": {
-        "policy_type": "constant",
-        "uniform_price": 4.0,
-        "price_new": 3.0,
-        "price_old": 4.5,
-        "regime": 0,
-    },
-    "reactive_uniform": {
-        "policy_type": "rule_based",
-        "base_uniform_price": 3,
-        "base_price_new": 2.0,
-        "base_price_old": 3.0,
-        "regime": 0,
-        "market_share_sensitivity": 1.0,
-        "price_step": 1.0,
-    },
 
-    "agressive_random_reactive_uniform":{
+    "premium_random_reactive_uniform":{
         "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(0.5, 2.0),
+        "base_uniform_range" :(3.5, 5.0),
         "base_price_new_factor": 0.8,          # new price = factor * base_uniform
         "base_price_old_factor" :1.2,          # old price = factor * base_uniform
         "regime":0,
-        "sensitivity_range" :(0.6 ,1.0),
+        "sensitivity_range" :(0.0, 0.3),
         "step_range" :(0,0.5),
     },
 
@@ -663,17 +648,32 @@ OPPONENT_PRESETS = {
         "step_range" :(0,0.5),
     },
 
-
-    "premium_random_reactive_uniform":{
+    
+    "agressive_random_reactive_uniform":{
         "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(3.5, 5.0),
+        "base_uniform_range" :(0.5, 2.0),
         "base_price_new_factor": 0.8,          # new price = factor * base_uniform
         "base_price_old_factor" :1.2,          # old price = factor * base_uniform
         "regime":0,
-        "sensitivity_range" :(0.0, 0.3),
+        "sensitivity_range" :(0.6 ,1.0),
         "step_range" :(0,0.5),
     },
 
+
+    "passive_bbp": {
+        "policy_type": "constant",
+        "uniform_price": 2.5,
+        "price_new": 1.8,
+        "price_old": 3.2,
+        "regime": 1,
+    },
+    
+
+
+    
+
+
+    
     "reactive_bbp": {
         "policy_type": "rule_based",
         "base_uniform_price": 2.5,

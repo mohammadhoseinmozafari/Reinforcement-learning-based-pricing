@@ -236,6 +236,7 @@ class SingleAgentHotellingEnv(gym.Env):
     
     def reset(
         self,
+        *,
         seed: Optional[int] = None,
         options: Optional[Dict] = None
     ) -> Tuple[Union[Dict, np.ndarray], Dict]:
@@ -343,10 +344,7 @@ class SingleAgentHotellingEnv(gym.Env):
         """
         self.opponent_policy = policy
     
-    @property
-    def unwrapped(self):
-        """Return underlying environment."""
-        return self._env
+    
 
 
 # =============================================================================
