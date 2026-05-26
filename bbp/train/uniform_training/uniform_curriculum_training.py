@@ -10,7 +10,7 @@ from train.uniform_training.curriculum import UniformPricingCurriculum
 from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
 from models.reward_normalizer import EpisodeRewardNormalizer
 from train.metrics import TrainingMetrics
-from train.uniform_training.uniform_training import evaluate_agent
+from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 curr_config = CurriculumConfig(
     stages= UniformPricingCurriculum().OPPONENT_SEQUENCE,
     monitor_critic=False,
@@ -186,12 +186,11 @@ def train_with_curriculum(
                       f"LR: {lrs['actor_lr']:.2e} | Stage: {info['stage_name']} | "
                       f"Convergance: Critic{critic_stat}, Actor{actor_stat}, alpha{alpha_stat} ")
             if (episode + 1) % config.save_freq == 0:
-            save_checkpoint(agent, metrics, config, episode + 1)
+                save_checkpoint(agent, metrics, config, episode + 1)
+         # Final save
+    save_checkpoint(agent, metrics, config, config.num_episodes, final=True)
+  
+    env.close()
+    return agent, metrics
 
-train_with_curriculum(
-    'lol',
-    TrainingConfig(),
-    curr_config,
 
-
-)
