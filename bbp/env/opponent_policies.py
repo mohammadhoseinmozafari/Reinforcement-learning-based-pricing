@@ -649,7 +649,7 @@ OPPONENT_PRESETS = {
     },
 
     
-    "agressive_random_reactive_uniform":{
+    "aggressive_random_reactive_uniform":{
         "policy_type" : "randomized_rule_based",
         "base_uniform_range" :(0.5, 2.0),
         "base_price_new_factor": 0.8,          # new price = factor * base_uniform

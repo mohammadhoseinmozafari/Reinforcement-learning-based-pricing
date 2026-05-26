@@ -1,4 +1,7 @@
 import numpy as np
+from train.curriculum import CurriculumConfig
+from train.uniform_training.curriculum import UniformPricingCurriculum
+from train.uniform_training.uniform_curriculum_training import train_with_curriculum
 from train.uniform_training.uniform_training import TrainingConfig, plot_training_results, train_uniform_pricing, plot_training_results
 # =============================================================================
 # MAIN
@@ -8,16 +11,26 @@ def main():
     """Run Phase 2.1 training."""
     # Create configuration
     config = TrainingConfig(
-        num_episodes=1000,
-        warmup_steps=1000,
+        num_episodes=800,
+        warmup_steps=300,
         eval_freq=10,
         save_freq=100,
         opponent_type="premium_uniform",  
-        seed=42,
+        seed=63,
     )
+    curr_config = CurriculumConfig(
+    stages= UniformPricingCurriculum().OPPONENT_SEQUENCE,
+    monitor_critic=False,
+    monitor_actor=False,
+    window_size=20,
+    change_threshold=0.03,
+    min_episodes_per_stage=50,
+    
+)
     
     # Train agent
-    agent, metrics = train_uniform_pricing(config, verbose=True)
+    agent, metrics = train_with_curriculum(config=config, curriculum_config=curr_config, verbose=True)
+
     
     # Plot results
     print("\n" + "=" * 60)

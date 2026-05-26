@@ -5,7 +5,7 @@ by Haarnoja et al. (2018)
 """
 import gymnasium as gym
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -86,8 +86,8 @@ class Actor(nn.Module):
         state_dim: int,
         action_dim: int,
         hidden_dim: int = 256,
-        log_std_min: float = -10,
-        log_std_max: float = 2
+        log_std_min: float = -5,
+        log_std_max: float = 0.5
     ):
         super(Actor, self).__init__()
         
@@ -171,19 +171,22 @@ class Critic(nn.Module):
         
         # Q1 network
         self.q1_fc1 = nn.Linear(state_dim + action_dim, hidden_dim)
-        self.q1_fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.q1_out = nn.Linear(hidden_dim, 1)
+        self.q1_fc2 = nn.Linear(hidden_dim, 128)
+        self.q1_fc3 = nn.Linear(128, 64)
+        self.q1_out = nn.Linear(64, 1)
         
         # Q2 network
         self.q2_fc1 = nn.Linear(state_dim + action_dim, hidden_dim)
-        self.q2_fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.q2_out = nn.Linear(hidden_dim, 1)
+        self.q2_fc2 = nn.Linear(hidden_dim, 128)
+        self.q2_fc3 = nn.Linear(128, 64)
+        self.q2_out = nn.Linear(64, 1)
+        
         
         self._initialize_weights()
     
     def _initialize_weights(self):
         """Initialize network weights."""
-        for layer in [self.q1_fc1, self.q1_fc2, self.q2_fc1, self.q2_fc2]:
+        for layer in [self.q1_fc1, self.q1_fc2,self.q1_fc3, self.q2_fc1,  self.q2_fc2, self.q2_fc3]:
             nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
             nn.init.zeros_(layer.bias)
         
@@ -198,11 +201,13 @@ class Critic(nn.Module):
         # Q1
         q1 = F.relu(self.q1_fc1(x))
         q1 = F.relu(self.q1_fc2(q1))
+        q1 = F.relu(self.q1_fc3(q1))
         q1 = self.q1_out(q1)
         
         # Q2
         q2 = F.relu(self.q2_fc1(x))
         q2 = F.relu(self.q2_fc2(q2))
+        q2= F.relu(self.q2_fc3(q2))
         q2 = self.q2_out(q2)
         
         return q1, q2
@@ -212,6 +217,7 @@ class Critic(nn.Module):
         x = torch.cat([state, action], dim=-1)
         q1 = F.relu(self.q1_fc1(x))
         q1 = F.relu(self.q1_fc2(q1))
+        q1= F.relu(self.q1_fc3(q1))
         q1 = self.q1_out(q1)
         return q1
 
@@ -244,10 +250,11 @@ class SAC:
         action_dim: int,
         action_scale: float = 1.0,
         hidden_dim: int = 256,
+
         lr_actor: float = 3e-4,
-        lr_critic: float = 3e-4,
-        lr_alpha: float = 3e-4,
-        gamma: float = 0.99,
+        lr_critic: float = 3e-5,
+        lr_alpha: float = 3e-5,
+        gamma: float = 0.95,
         tau: float = 0.005,
         alpha: float = 0.2,
         auto_alpha: bool = True,

@@ -14,14 +14,14 @@ class TrainingConfig:
     
     # SAC hyperparameters
     hidden_dim: int = 256
-    lr_actor: float = 1e-4
+    lr_actor: float = 5e-5
     lr_critic: float = 3e-4
-    lr_alpha: float = 3e-4
+    lr_alpha: float = 1e-4
     gamma: float = 0.99
     tau: float = 0.005
     auto_alpha: bool = True
     buffer_size: int = 100000
-    batch_size: int = 256
+    batch_size: int = 512
     
     # Training
     num_episodes: int = 1000
@@ -35,7 +35,7 @@ class TrainingConfig:
     save_freq: int = 100  # Save model every N episodes
     
     # Reproducibility
-    seed: int = 42
+    seed: int = 53
     
     # Paths
     save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"

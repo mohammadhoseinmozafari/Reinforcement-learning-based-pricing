@@ -153,7 +153,8 @@ class OpponentCurriculumScheduler:
         half = len(vals) // 2
         first_half_mean = np.mean(vals[:half])
         second_half_mean = np.mean(vals[half:])
-
+        if second_half_mean> first_half_mean:
+            return False, 1.0
         relative_change = abs(second_half_mean - first_half_mean)/ abs(first_half_mean)
         is_stable = relative_change <= self.config.change_threshold
 
@@ -235,15 +236,15 @@ class OpponentCurriculumScheduler:
             "stage_idx": self.current_stage_idx,
             "episodes_spent": self.episodes_in_stage,
             "total_episodes": self.total_episodes,
-            "avg_eval_reward": np.mean(self.recent_eval_rewards) if self.recent_eval_rewards else 0.0,
             "reason": reason,
         }
         
+        self.advancement_records.append(completion_record)
         
         # Advance
         self.current_stage_idx += 1
         self.episodes_in_stage = 0
-        self.recent_eval_rewards = []
+        
         
         new_stage = self.current_stage
         
@@ -253,7 +254,6 @@ class OpponentCurriculumScheduler:
             print("=" * 60)
             print(f"  Completed: {completion_record['stage']}")
             print(f"  Episodes spent: {completion_record['episodes_spent']}")
-            print(f"  Avg eval reward: {completion_record['avg_eval_reward']:.1f}")
             print(f"  Reason: {reason}")
             print(f"  New stage: {new_stage.name}")
             print(f"  New opponent: {new_stage.opponent_type}")
@@ -303,7 +303,6 @@ class OpponentCurriculumScheduler:
             "progress": self.progress,
             "is_last_stage": self.is_last_stage,
             "convergence_status": {k: v for k, v in status.items()},
-            "recent_avg_reward": np.mean(self.recent_eval_rewards) if self.recent_eval_rewards else 0.0,
         }
     
     def get_summary(self) -> Dict:

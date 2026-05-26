@@ -1,4 +1,3 @@
-from tkinter import N
 from typing import List
 
 import numpy as np
@@ -11,12 +10,7 @@ from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
 from models.reward_normalizer import EpisodeRewardNormalizer
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
-curr_config = CurriculumConfig(
-    stages= UniformPricingCurriculum().OPPONENT_SEQUENCE,
-    monitor_critic=False,
-    monitor_actor=False
-    
-)
+
 
 def train_with_curriculum(
         config: TrainingConfig,
@@ -166,9 +160,9 @@ def train_with_curriculum(
             if verbose:
                 info = curriculum.get_info()
                 conv = info['convergence_status']
-                critic_stat = "✓" if conv.get('critic', False) else "✗"
-                actor_stat = "✓" if conv.get('actor', False) else "✗"
-                alpha_stat = "✓" if conv.get('alpha', False) else "✗"
+                critic_stat = "✓" if conv.get('critic', False) == True else "✗"
+                actor_stat = "✓" if conv.get('actor', False) == True else "✗"
+                alpha_stat = "✓" if conv.get('alpha', False) == True else "✗"
                 avg_reward = np.mean(metrics.episode_rewards[-config.eval_freq:])
                 avg_price = np.mean(metrics.episode_prices[-config.eval_freq:])
                 

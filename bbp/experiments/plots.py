@@ -165,7 +165,7 @@ if data_source == "Upload JSON file":
         st.sidebar.warning("Please upload a JSON file")
         st.stop()
 else:
-        data = load_data("experiments/uniform_training/agressive_uniform/metrics_final.json")
+        data = load_data("experiments/phase2/phase2_1_uniform_training_results/metrics_final.json")
 
 # DataFrame for episode metrics
 df_metrics = pd.DataFrame({
