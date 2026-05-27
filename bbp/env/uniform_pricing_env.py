@@ -111,9 +111,6 @@ class UniformPricingEnv(gym.Env):
         #   - own_price (1)  
         #   - opponent_price (1)
         #   - last_demand_ratio (1)
-        #   - time_progress (1)
-        #   - profit_trend (1)
-        #   - popularity_change (1)
         obs_dim = 7
         self.observation_space = spaces.Box(
             low=-np.inf,
@@ -164,22 +161,19 @@ class UniformPricingEnv(gym.Env):
         demand_ratio = firm.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.0
         
         # Time progress
-        time_progress = self._timestep / self.episode_length if self.episode_length > 0 else 0.0
+        # time_progress = self._timestep / self.episode_length if self.episode_length > 0 else 0.0
         
         # Profit trend
-        profit_trend = firm.get_profit_trend()
+        # profit_trend = firm.get_profit_trend()
         
         # Popularity change
-        pop_change = firm.get_popularity_change()
+        # pop_change = firm.get_popularity_change()
         
         obs = np.array([
             market_share,
             own_price_norm,
             opp_price_norm,
             demand_ratio,
-            time_progress,
-            profit_trend,
-            pop_change,
         ], dtype=np.float32)
         
         if self.normalize_obs:

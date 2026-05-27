@@ -7,7 +7,7 @@ class UniformPricingCurriculum:
         OpponentStage(
             name = "premium_uniform",
             opponent_type =  "premium_uniform",
-            description =  "Fixed price 3.5, never changes",
+            description =  "Fixed price 4, never changes",
             difficulty =  OpponentDifficulty.TUTORIAL,
         ),
         OpponentStage(

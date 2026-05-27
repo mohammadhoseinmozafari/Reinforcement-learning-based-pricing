@@ -18,11 +18,11 @@ from config.constants import EPISODE_LENGTH, PRICE_UNIFORM_MIN, PRICE_UNIFORM_MA
 
 # ── Settings ──────────────────────────────────────────────────
 MODEL_PATH = "experiments/phase2/phase2_1_uniform_training_results/sac_uniform_final.pt"
-OPPONENT_PRICES = [1.5, 3.0, 4.5, 5.0]   # prices to test against
+OPPONENT_PRICES = [1.5, 2.5, 4.0, 5.0]   # prices to test against
 NUM_EPISODES = 10                          # episodes per opponent price
 EPISODE_LEN = EPISODE_LENGTH
 NUM_CONSUMERS = 50
-SEED = 42
+SEED = 52
 
 
 def make_test_env(opponent_price: float) -> UniformPricingEnv:
@@ -93,6 +93,7 @@ def test_agent(agent: SAC, env: UniformPricingEnv, num_episodes: int):
     stats = {
         "avg_reward": np.mean(all_rewards),
         "avg_profit": np.mean(all_profits),
+        "total_profit": np.sum(all_profits),
         "avg_price": np.mean(all_prices),
         "avg_share": np.mean(all_shares),
     }
@@ -120,6 +121,7 @@ def main():
         print(f"\nOpponent price = {opp_price:.1f}")
         print(f"  Avg Reward       : {stats['avg_reward']:.2f}")
         print(f"  Avg Total Profit : {stats['avg_profit']:.2f}")
+        print(f"  Total Profit : {stats['total_profit']:.2f}")
         print(f"  Avg Agent Price  : {stats['avg_price']:.2f}")
         print(f"  Avg Market Share : {stats['avg_share']:.2f}")
 
