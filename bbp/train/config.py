@@ -6,7 +6,7 @@ from config.constants import NUM_CONSUMERS, EPISODE_LENGTH
 
 @dataclass
 class TrainingConfig:
-    """Configuration for Phase 2.1 training."""
+    """Configuration for Uniform Pricing training."""
     # Environment
     num_consumers: int = NUM_CONSUMERS
     episode_length: int = EPISODE_LENGTH
@@ -35,7 +35,7 @@ class TrainingConfig:
     save_freq: int = 100  # Save model every N episodes
     
     # Reproducibility
-    seed: int = 53
+    seed: int = 42
     
     # Paths
     save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"

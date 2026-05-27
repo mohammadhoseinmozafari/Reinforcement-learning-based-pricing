@@ -111,7 +111,7 @@ class UniformPricingEnv(gym.Env):
         #   - own_price (1)  
         #   - opponent_price (1)
         #   - last_demand_ratio (1)
-        obs_dim = 7
+        obs_dim = 4
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
