@@ -4,6 +4,49 @@ import gymnasium as gym
 import numpy as np
 from collections import deque
 
+import gymnasium as gym
+import numpy as np
+
+
+class ProfitScaleWrapper(gym.RewardWrapper):
+    """
+    Fixed reward normalization for Hotelling pricing environment.
+
+    Raw profit:
+        reward = price * quantity
+
+    Theoretical maximum:
+        max_price * num_consumers
+
+    Normalized reward:
+        reward / max_step_profit
+    """
+
+    def __init__(
+        self,
+        env: gym.Env,
+        max_price: float = 5.0,
+        num_consumers: int = 100,
+        clip_reward: bool = False,
+    ):
+        super().__init__(env)
+
+        self.max_price = max_price
+        self.num_consumers = num_consumers
+
+        # Maximum possible profit in one step
+        self.max_step_profit = max_price * num_consumers
+
+        self.clip_reward = clip_reward
+
+    def reward(self, reward):
+        normalized = float(reward) / self.max_step_profit
+
+        if self.clip_reward:
+            normalized = np.clip(normalized, -1.0, 1.0)
+
+        return float(normalized)
+
 class EpisodeRewardNormalizer(gym.Wrapper):
     """
     Normalize rewards within each episode using episode-level statistics.

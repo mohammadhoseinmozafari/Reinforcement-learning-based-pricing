@@ -10,7 +10,7 @@ from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
 from models.reward_normalizer import EpisodeRewardNormalizer
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
-
+from models.reward_normalizer import FixedRewardNormalizer
 
 def train_with_curriculum(
         config: TrainingConfig,
@@ -20,14 +20,14 @@ def train_with_curriculum(
     np.random.seed(config.seed)
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
-    env = make_uniform_pricing_env(
+    base_env = make_uniform_pricing_env(
         opponent=curriculum.current_opponent,
         num_consumers = config.num_consumers,
         episode_length = config.episode_length,
         seed = config.seed
         
     )
-    # env = EpisodeRewardNormalizer(base_env)
+    env = FixedRewardNormalizer(base_env)
     assert env.observation_space.shape
     assert env.action_space.shape
 
@@ -153,17 +153,18 @@ def train_with_curriculum(
         # EVALUATION
         # =========================================
         if (episode + 1) % config.eval_freq == 0:
-            eval_reward = evaluate_agent(env, agent, config.eval_episodes, config.episode_length)
+            eval_reward = evaluate_agent(base_env, agent, config.eval_episodes, config.episode_length)
             metrics.eval_rewards.append(eval_reward)
             new_opponent = curriculum.advance()
             if new_opponent is not None:
-                env = make_uniform_pricing_env(
+                base_env = make_uniform_pricing_env(
                     opponent=new_opponent.opponent_type,
                     num_consumers = config.num_consumers,
                     episode_length = config.episode_length,
                     seed= config.seed+ episode,
 
                 )
+                env = EpisodeRewardNormalizer(base_env)
             if verbose:
                 info = curriculum.get_info()
                 conv = info['convergence_status']
