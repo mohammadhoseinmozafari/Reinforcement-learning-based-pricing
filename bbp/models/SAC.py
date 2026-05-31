@@ -193,11 +193,20 @@ class Actor(nn.Module):
     def get_policy_stats(self, state) -> dict[str, Any]:
         mean, log_std = self.forward(state)
         std = log_std.exp()
+        raw_log_std = self.get_raw_log_std(state)
         return {
             'mean' : mean,
+            'raw_log_std': raw_log_std,
             'log_std':log_std,
             'std': std
         }
+    def get_raw_log_std(self, state):
+        x = F.relu(self.fc1(state))
+        x = F.relu(self.fc2(x))
+        raw_log_std = self.log_std(x)
+        return raw_log_std
+
+
 
 
 
@@ -580,8 +589,10 @@ class SAC:
 
         return {
             "mean": stats["mean"].cpu().numpy()[0],
+            "raw_log_std": stats["raw_log_std"].cpu().numpy()[0],
             "log_std": stats["log_std"].cpu().numpy()[0],
-            "std": stats["std"].cpu().numpy()[0]
+            "std": stats["std"].cpu().numpy()[0],
+            
         }
 
 
