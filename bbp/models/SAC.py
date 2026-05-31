@@ -86,8 +86,8 @@ class Actor(nn.Module):
         state_dim: int,
         action_dim: int,
         hidden_dim: int = 256,
-        log_std_min: float = -5,
-        log_std_max: float = 0.5
+        log_std_min: float = -15,
+        log_std_max: float = 0.0
     ):
         super(Actor, self).__init__()
         
@@ -95,9 +95,9 @@ class Actor(nn.Module):
         self.log_std_max = log_std_max
         
         self.fc1 = nn.Linear(state_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.mean = nn.Linear(hidden_dim, action_dim)
-        self.log_std = nn.Linear(hidden_dim, action_dim)
+        self.fc2 = nn.Linear(hidden_dim, 128)
+        self.mean = nn.Linear(128, action_dim)
+        self.log_std = nn.Linear(128, action_dim)
         
         self._initialize_weights()
     
@@ -252,8 +252,8 @@ class SAC:
         hidden_dim: int = 256,
 
         lr_actor: float = 3e-4,
-        lr_critic: float = 3e-5,
-        lr_alpha: float = 3e-5,
+        lr_critic: float = 3e-4,
+        lr_alpha: float = 3e-4,
         gamma: float = 0.95,
         tau: float = 0.005,
         alpha: float = 0.2,
@@ -262,7 +262,7 @@ class SAC:
         buffer_size: int = 1000000,
         grad_clip_norm : float = 1.0,
         batch_size: int = 256,
-        lr_scheduler : Optional[str] = 'step',
+        lr_scheduler : Optional[str] = None,
         lr_scheduler_kwargs: Optional[Dict] = None,
         device: Optional[str] = None
     ):
@@ -307,20 +307,19 @@ class SAC:
             self.log_alpha = None
             self.alpha_optimizer = None
 
-        
+        if lr_scheduler:
         # Learning rate schedulers
-        print("Initializing Schedulers")
-        self.actor_scheduler = self._create_scheduler(
-            self.actor_optimizer, lr_scheduler, lr_scheduler_kwargs
-        )
-        self.critic_scheduler = self._create_scheduler(
-            self.critic_optimizer, lr_scheduler, lr_scheduler_kwargs
-        )
-        self.alpha_scheduler = self._create_scheduler(
-            self.alpha_optimizer, lr_scheduler, lr_scheduler_kwargs
-        ) if self.alpha_optimizer is not None else None
-        
-        assert self.actor_scheduler and self.critic_scheduler and self.alpha_scheduler
+            print("Initializing Schedulers")
+            self.actor_scheduler = self._create_scheduler(
+                self.actor_optimizer, lr_scheduler, lr_scheduler_kwargs
+            )
+            self.critic_scheduler = self._create_scheduler(
+                self.critic_optimizer, lr_scheduler, lr_scheduler_kwargs
+            )
+            self.alpha_scheduler = self._create_scheduler(
+                self.alpha_optimizer, lr_scheduler, lr_scheduler_kwargs
+            ) if self.alpha_optimizer is not None else None
+            
 
         # Replay buffer
         self.replay_buffer = ReplayBuffer(buffer_size)
@@ -523,6 +522,16 @@ class SAC:
         self.total_steps = checkpoint['total_steps']
         
         print(f"Model loaded from {path}")
+    
+    def get_info(self):
+        return {
+            'gammma': self.gamma,
+            'tau': self.tau,
+            'alpha': self.alpha,
+            'auto_alpha': self.auto_alpha,
+            'target_entropy': self.target_entropy,
+
+        }
 
 
 def train_sac(
