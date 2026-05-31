@@ -164,7 +164,7 @@ def train_with_curriculum(
                     seed= config.seed+ episode,
 
                 )
-                env = EpisodeRewardNormalizer(base_env)
+                env = FixedRewardNormalizer(base_env)
             if verbose:
                 info = curriculum.get_info()
                 conv = info['convergence_status']
