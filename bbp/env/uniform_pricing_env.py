@@ -96,7 +96,7 @@ class UniformPricingEnv(gym.Env):
         # =====================================
         # Action is normalized to [0, 1], scaled to price range internally
         self.action_space = spaces.Box(
-            low=0.0,
+            low=-1.0,
             high=1.0,
             shape=(1,),
             dtype=np.float32
@@ -132,7 +132,9 @@ class UniformPricingEnv(gym.Env):
     
     def _action_to_price(self, action: np.ndarray) -> float:
         """Convert normalized action [0, 1] to actual price."""
-        normalized = float(np.clip(action[0], 0.0, 1.0))
+
+        normalized = (float(action[0]) + 1.0) / 2.0 
+        normalized = float(np.clip(normalized, 0.0, 1.0))
         price = PRICE_UNIFORM_MIN + normalized * (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN)
         return price
     

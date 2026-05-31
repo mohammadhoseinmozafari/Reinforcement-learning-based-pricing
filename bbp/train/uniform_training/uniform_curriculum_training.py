@@ -20,14 +20,14 @@ def train_with_curriculum(
     np.random.seed(config.seed)
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
-    base_env = make_uniform_pricing_env(
+    env = make_uniform_pricing_env(
         opponent=curriculum.current_opponent,
         num_consumers = config.num_consumers,
         episode_length = config.episode_length,
         seed = config.seed
         
     )
-    env = EpisodeRewardNormalizer(base_env)
+    # env = EpisodeRewardNormalizer(base_env)
     assert env.observation_space.shape
     assert env.action_space.shape
 
@@ -63,10 +63,18 @@ def train_with_curriculum(
         lr_alpha=config.lr_alpha,
         gamma=config.gamma,
         tau=config.tau,
+        alpha= config.alpha,
         auto_alpha=config.auto_alpha,
         buffer_size=config.buffer_size,
         batch_size=config.batch_size,
+        target_entropy=config.target_entropy,
+        log_std_min=config.log_std_min,
+        log_std_max=config.log_std_max
     )
+    if verbose:
+        print("SAC Configuration")
+        print(agent.get_info())
+
     metrics = TrainingMetrics()
     # =========================================
     # WARMUP: Random exploration
@@ -149,14 +157,13 @@ def train_with_curriculum(
             metrics.eval_rewards.append(eval_reward)
             new_opponent = curriculum.advance()
             if new_opponent is not None:
-                base_env = make_uniform_pricing_env(
+                env = make_uniform_pricing_env(
                     opponent=new_opponent.opponent_type,
                     num_consumers = config.num_consumers,
                     episode_length = config.episode_length,
                     seed= config.seed+ episode,
 
                 )
-                env = EpisodeRewardNormalizer(base_env)
             if verbose:
                 info = curriculum.get_info()
                 conv = info['convergence_status']
