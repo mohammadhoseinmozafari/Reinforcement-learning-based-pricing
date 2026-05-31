@@ -131,7 +131,7 @@ class UniformPricingEnv(gym.Env):
         self._episode_market_shares = []
     
     def _action_to_price(self, action: np.ndarray) -> float:
-        """Convert normalized action [0, 1] to actual price."""
+        """Convert normalized action [-1, 1] to actual price."""
 
         normalized = (float(action[0]) + 1.0) / 2.0 
         normalized = float(np.clip(normalized, 0.0, 1.0))
@@ -139,9 +139,10 @@ class UniformPricingEnv(gym.Env):
         return price
     
     def _price_to_normalized(self, price: float) -> float:
-        """Convert actual price to normalized [0, 1] value."""
-        return (price - PRICE_UNIFORM_MIN) / (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN)
-    
+        """Convert actual price to normalized [-1, 1] value."""
+        normalized =  (price - PRICE_UNIFORM_MIN) / (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN)
+        normalized = 2.0 * normalized - 1.0
+        return normalized
     def _get_observation(self) -> np.ndarray:
         """
         Build observation vector from current market state.

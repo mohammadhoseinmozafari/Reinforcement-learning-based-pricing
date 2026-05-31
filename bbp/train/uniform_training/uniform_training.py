@@ -229,12 +229,23 @@ def evaluate_agent(
     for _ in range(num_episodes):
         state, _ = env.reset()
         episode_reward = 0
-        
+        mean_values = []
+        std_values = []
+        raw_log_std_values= []
+        log_std_values = []
+        actions_taken = []
+
         for _ in range(max_steps):
-            # Use deterministic action for evaluation
+            
+            stats = agent.get_policy_stats(state)
+            mean_values.append(float(stats["mean"][0]))
+            std_values.append(float(stats["std"][0]))
+            raw_log_std_values.append(float(stats['raw_log_std'][0]))
+            log_std_values.append(float(stats["log_std"][0]))
+
             action = agent.select_action(state, deterministic=True)
             
-            
+            actions_taken.append(float(action[0]))
             next_state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += float(reward)
             state = next_state
@@ -243,7 +254,14 @@ def evaluate_agent(
                 break
         
         total_reward += episode_reward
-    
+    print(
+        f"[Policy Stats] | "
+        f"mean={np.mean(mean_values):.3f} | "
+        f"raw_log_std={np.mean(raw_log_std_values):.3f} | "
+        f"log_std={np.mean(log_std_values):.3f} | "
+        f"std={np.mean(std_values):.3f} | "
+        f"action={np.mean(actions_taken):.3f}"
+    )    
     return total_reward / num_episodes
 
 

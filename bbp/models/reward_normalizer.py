@@ -8,7 +8,7 @@ import gymnasium as gym
 import numpy as np
 
 
-class ProfitScaleWrapper(gym.RewardWrapper):
+class FixedRewardNormalizer(gym.RewardWrapper):
     """
     Fixed reward normalization for Hotelling pricing environment.
 
