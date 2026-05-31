@@ -1,3 +1,3 @@
 from optimization.uniform_pricing import grid_search
 
-grid_search('passive_uniform')
+grid_search('aggressive_uniform', 0.01)

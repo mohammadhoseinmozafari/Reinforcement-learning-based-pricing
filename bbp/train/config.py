@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from config.constants import NUM_CONSUMERS, EPISODE_LENGTH
+from typing import Optional, Dict
 # =============================================================================
 # TRAINING CONFIGURATION
 # =============================================================================
@@ -14,15 +15,23 @@ class TrainingConfig:
     
     # SAC hyperparameters
     hidden_dim: int = 256
-    lr_actor: float = 5e-5
-    lr_critic: float = 3e-4
-    lr_alpha: float = 1e-4
+    lr_actor: float = 1e-3
+    lr_critic: float = 1e-3
+    lr_alpha: float = 1e-3
+    target_entropy : float = -0.5
     gamma: float = 0.99
     tau: float = 0.005
-    auto_alpha: bool = True
+    auto_alpha: bool = False
+    log_std_min : float = -10.0
+    log_std_max: float = -1.0
+
     buffer_size: int = 100000
     batch_size: int = 512
-    
+    alpha: float = 0.1
+    auto_alpha: bool = False
+    lr_scheduler : Optional[str] = None
+    lr_scheduler_kwargs: Optional[Dict] = None
+    device: Optional[str] = None
     # Training
     num_episodes: int = 1000
     warmup_steps: int = 1000

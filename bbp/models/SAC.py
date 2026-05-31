@@ -5,7 +5,7 @@ by Haarnoja et al. (2018)
 """
 import gymnasium as gym
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -16,9 +16,41 @@ import numpy as np
 from collections import deque
 import random
 
-
 class ReplayBuffer:
-    """Experience Replay Buffer for off-policy learning."""
+    def __init__(self, capacity: int) -> None:
+        self.buffer = deque(maxlen=capacity)
+  
+    
+    def push(self, state, action, reward, next_state, done) -> None:
+        """Store a transition in the buffer."""     
+        self.buffer.append((state, action, reward, next_state, done))
+
+    
+    def sample(self, batch_size: int):
+        """Sample a batch of transitions."""
+        
+        return self._sample_uniform(batch_size)
+        
+        
+    
+    def _sample_uniform(self, batch_size) :
+            batch = random.sample(self.buffer, batch_size)
+            states, actions, rewards, next_states, dones = zip(*batch)
+        
+            return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards, dtype=np.float32),
+            np.array(next_states),
+            np.array(dones, dtype=np.float32)
+        )
+
+    def __len__(self):
+        return len(self.buffer)
+
+
+class RecencyBiasReplayBuffer:
+    """Experience Replay Buffer which cares more about the recent experiences."""
     
     def __init__(self, capacity: int, recent_bias: float = 0.3):
         self.buffer = deque(maxlen=capacity)
@@ -86,8 +118,8 @@ class Actor(nn.Module):
         state_dim: int,
         action_dim: int,
         hidden_dim: int = 256,
-        log_std_min: float = -15,
-        log_std_max: float = 0.0
+        log_std_min: float = -10,
+        log_std_max: float = -1.0
     ):
         super(Actor, self).__init__()
         
@@ -158,6 +190,15 @@ class Actor(nn.Module):
         action = torch.tanh(z)
         
         return action
+    def get_policy_stats(self, state) -> dict[str, Any]:
+        mean, log_std = self.forward(state)
+        std = log_std.exp()
+        return {
+            'mean' : mean,
+            'log_std':log_std,
+            'std': std
+        }
+
 
 
 class Critic(nn.Module):
@@ -254,11 +295,15 @@ class SAC:
         lr_actor: float = 3e-4,
         lr_critic: float = 3e-4,
         lr_alpha: float = 3e-4,
+        
         gamma: float = 0.95,
         tau: float = 0.005,
         alpha: float = 0.2,
         auto_alpha: bool = True,
+        
         target_entropy: Optional[float] = None,
+        log_std_min: float = -10.0,
+        log_std_max: float = -1.0,
         buffer_size: int = 1000000,
         grad_clip_norm : float = 1.0,
         batch_size: int = 256,
@@ -269,12 +314,17 @@ class SAC:
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.action_scale = action_scale
+        
         self.gamma = gamma
         self.tau = tau
+        self.log_std_min = log_std_min
+        self.log_std_max = log_std_max
+
         self.batch_size = batch_size
         self.auto_alpha = auto_alpha
         self.grad_clip_norm = grad_clip_norm
         self.lr_scheduler_type = lr_scheduler
+        self.target_entropy = target_entropy
         # Set device
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -282,7 +332,7 @@ class SAC:
             self.device = torch.device(device)
         
         # Initialize networks
-        self.actor = Actor(state_dim, action_dim, hidden_dim).to(self.device)
+        self.actor = Actor(state_dim, action_dim, hidden_dim, self.log_std_min, self.log_std_max).to(self.device)
         self.critic = Critic(state_dim, action_dim, hidden_dim).to(self.device)
         self.critic_target = Critic(state_dim, action_dim, hidden_dim).to(self.device)
         
@@ -307,19 +357,18 @@ class SAC:
             self.log_alpha = None
             self.alpha_optimizer = None
 
-        if lr_scheduler:
-        # Learning rate schedulers
-            print("Initializing Schedulers")
-            self.actor_scheduler = self._create_scheduler(
-                self.actor_optimizer, lr_scheduler, lr_scheduler_kwargs
-            )
-            self.critic_scheduler = self._create_scheduler(
-                self.critic_optimizer, lr_scheduler, lr_scheduler_kwargs
-            )
-            self.alpha_scheduler = self._create_scheduler(
-                self.alpha_optimizer, lr_scheduler, lr_scheduler_kwargs
-            ) if self.alpha_optimizer is not None else None
-            
+    # Learning rate schedulers
+        print("Initializing Schedulers")
+        self.actor_scheduler = self._create_scheduler(
+            self.actor_optimizer, lr_scheduler, lr_scheduler_kwargs
+        )
+        self.critic_scheduler = self._create_scheduler(
+            self.critic_optimizer, lr_scheduler, lr_scheduler_kwargs
+        )
+        self.alpha_scheduler = self._create_scheduler(
+            self.alpha_optimizer, lr_scheduler, lr_scheduler_kwargs
+        ) if self.alpha_optimizer is not None else None
+        
 
         # Replay buffer
         self.replay_buffer = ReplayBuffer(buffer_size)
@@ -523,15 +572,30 @@ class SAC:
         
         print(f"Model loaded from {path}")
     
-    def get_info(self):
-        return {
-            'gammma': self.gamma,
-            'tau': self.tau,
-            'alpha': self.alpha,
-            'auto_alpha': self.auto_alpha,
-            'target_entropy': self.target_entropy,
+    def get_policy_stats(self, state) -> Dict[str, Any]:
+        state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
 
+        with torch.no_grad():
+            stats = self.actor.get_policy_stats(state)
+
+        return {
+            "mean": stats["mean"].cpu().numpy()[0],
+            "log_std": stats["log_std"].cpu().numpy()[0],
+            "std": stats["std"].cpu().numpy()[0]
         }
+
+
+    def get_info(self):
+            return {
+                'gammma': self.gamma,
+                'tau': self.tau,
+                'alpha': self.alpha,
+                'auto_alpha': self.auto_alpha,
+                'target_entropy': self.target_entropy,
+                'log_std_min': self.log_std_min,
+                'log_std_max': self.log_std_max
+
+            }
 
 
 def train_sac(

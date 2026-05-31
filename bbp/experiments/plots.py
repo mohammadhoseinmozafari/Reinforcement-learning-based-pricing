@@ -124,14 +124,16 @@ colors = {
     'soft_blue':    "#A8CEEF",
     'harsh_blue':    "#44A1F3",    # iPad Air blue
     'soft_green':   "#7DF67D",   # iPhone 15 green
-    'soft_orange':  "#FEB193",   # iMac orange (pastel)
+    'soft_orange':  "#F9A686",   # iMac orange (pastel)
     'soft_pink':    "#F5C5D5",
     'harsh_pink':    "#F58AAD",   # iPhone 15 pink
     'soft_purple':  '#D5C5F0',   # iPad Air purple
     'harsh_purple': "#BD6DFB",
     'soft_teal':    "#BDEEE2",   # iMac teal (pastel)
     'harsh_teal':    "#0BD4A2",   # iMac teal (pastel)
-    'soft_gray':    "#C9C9E1",   # starlight
+    'soft_gray':    "#C9C9E1", 
+    'harsh_gray':    "#212125",   # starlight
+  # starlight
     'soft_yellow':  '#FFF5C0',   # iPhone 14 yellow
     'soft_red':     "#F68C9D",   # PRODUCT(RED) pastel
 }

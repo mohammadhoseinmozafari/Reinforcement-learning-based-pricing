@@ -87,6 +87,7 @@ def train_uniform_pricing(
         lr_alpha=config.lr_alpha,
         gamma=config.gamma,
         tau=config.tau,
+        alpha=config.alpha,
         auto_alpha=config.auto_alpha,
         buffer_size=config.buffer_size,
         batch_size=config.batch_size,
@@ -232,7 +233,7 @@ def evaluate_agent(
         for _ in range(max_steps):
             # Use deterministic action for evaluation
             action = agent.select_action(state, deterministic=True)
-            action = np.clip(action, 0.0, 1.0)
+            
             
             next_state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += float(reward)
