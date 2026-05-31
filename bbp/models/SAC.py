@@ -16,6 +16,8 @@ import numpy as np
 from collections import deque
 import random
 
+from train import config
+
 class ReplayBuffer:
     def __init__(self, capacity: int) -> None:
         self.buffer = deque(maxlen=capacity)
@@ -333,6 +335,7 @@ class SAC:
 
         self.batch_size = batch_size
         self.auto_alpha = auto_alpha
+        self.initial_alpha = alpha
         self.grad_clip_norm = grad_clip_norm
         self.lr_scheduler_type = lr_scheduler
         self.target_entropy = target_entropy
@@ -537,6 +540,27 @@ class SAC:
         for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
     
+    def reset_alpha(self):
+        if self.auto_alpha:
+            with torch.no_grad():
+                self.log_alpha.fill_(np.log(self.initial_alpha))
+
+            self.alpha = self.initial_alpha
+
+            self.alpha_optimizer = optim.Adam(
+                [self.log_alpha],
+                lr=self.alpha_optimizer.param_groups[0]["lr"]
+            )
+        else:
+            self.alpha = self.initial_alpha
+    def reset_optimizers(self):
+        """Clear Adam momentum/history."""
+
+        self.actor_optimizer.state.clear()
+        self.critic_optimizer.state.clear()
+
+        if self.alpha_optimizer is not None:
+            self.alpha_optimizer.state.clear()
     def get_current_lrs(self) -> Dict[str, float]:
         """Get current learning rates."""
         lrs = {

@@ -15,19 +15,19 @@ class TrainingConfig:
     
     # SAC hyperparameters
     hidden_dim: int = 256
-    lr_actor: float = 1e-3
-    lr_critic: float = 1e-3
-    lr_alpha: float = 1e-3
+    lr_actor: float = 5e-4
+    lr_critic: float = 5e-4
+    lr_alpha: float = 2e-4
     target_entropy : float = -0.5
     gamma: float = 0.9
     tau: float = 0.005
-    auto_alpha: bool = False
+    auto_alpha: bool = True
     log_std_min : float = -10.0
     log_std_max: float = 0.5
 
     buffer_size: int = 100000
     batch_size: int = 512
-    alpha: float = 0.1
+    alpha: float = 1.0
 
     lr_scheduler : Optional[str] = None
     lr_scheduler_kwargs: Optional[Dict] = None
@@ -35,7 +35,7 @@ class TrainingConfig:
     # Training
     num_episodes: int = 1000
     warmup_steps: int = 1000
-    updates_per_step: int = 1
+    updates_per_step: int = 2
     eval_freq: int = 10
     eval_episodes: int = 5
     

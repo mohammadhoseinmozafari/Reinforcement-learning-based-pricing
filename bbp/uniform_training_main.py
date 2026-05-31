@@ -11,20 +11,18 @@ def main():
     """Run Phase 2.1 training."""
     # Create configuration
     config = TrainingConfig(
-        num_episodes=800,
-        warmup_steps=300,
+        num_episodes=1000,
+        warmup_steps=500,
         eval_freq=10,
         save_freq=100,
-        opponent_type="premium_uniform",  
-        seed=63,
     )
     curr_config = CurriculumConfig(
     stages= UniformPricingCurriculum().OPPONENT_SEQUENCE,
-    monitor_critic=False,
-    monitor_actor=False,
+
     window_size=20,
     change_threshold=0.03,
-    min_episodes_per_stage=50,
+    min_episodes_per_stage=100,
+    max_episodes_per_stage=400
     
 )
     

@@ -157,6 +157,10 @@ def train_with_curriculum(
             metrics.eval_rewards.append(eval_reward)
             new_opponent = curriculum.advance()
             if new_opponent is not None:
+                print("\n" + "=" * 60)
+                print(f"Switching to opponent: {new_opponent.opponent_type}")
+                print("=" * 60)
+                base_env.close()
                 base_env = make_uniform_pricing_env(
                     opponent=new_opponent.opponent_type,
                     num_consumers = config.num_consumers,
@@ -167,6 +171,10 @@ def train_with_curriculum(
                 env = FixedRewardNormalizer(base_env)
             
                 agent.replay_buffer.clear() ### clear the replay buffer
+                agent.reset_alpha()
+                agent.critic_target.load_state_dict(
+                    agent.critic.state_dict()
+                    )
                 if verbose:
                     print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
                 state, _ = env.reset(seed = config.seed)
