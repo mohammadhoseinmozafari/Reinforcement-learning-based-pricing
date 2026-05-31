@@ -19,16 +19,16 @@ class TrainingConfig:
     lr_critic: float = 1e-3
     lr_alpha: float = 1e-3
     target_entropy : float = -0.5
-    gamma: float = 0.99
+    gamma: float = 0.9
     tau: float = 0.005
     auto_alpha: bool = False
     log_std_min : float = -10.0
-    log_std_max: float = -1.0
+    log_std_max: float = 0.5
 
     buffer_size: int = 100000
     batch_size: int = 512
     alpha: float = 0.1
-    auto_alpha: bool = False
+
     lr_scheduler : Optional[str] = None
     lr_scheduler_kwargs: Optional[Dict] = None
     device: Optional[str] = None

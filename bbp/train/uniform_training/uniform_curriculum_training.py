@@ -165,6 +165,18 @@ def train_with_curriculum(
 
                 )
                 env = FixedRewardNormalizer(base_env)
+            
+                agent.replay_buffer.clear() ### clear the replay buffer
+                if verbose:
+                    print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
+                state, _ = env.reset(seed = config.seed)
+                for _ in range (config.warmup_steps):
+                    action = env.action_space.sample()
+                    next_state, reward, terminated, truncated, info = env.step(action)
+                    done = terminated or truncated
+                    agent.replay_buffer.push(state, action, reward, next_state, done)
+                    state = next_state if not done else env.reset()[0]
+                
             if verbose:
                 info = curriculum.get_info()
                 conv = info['convergence_status']

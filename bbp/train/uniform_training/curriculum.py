@@ -23,25 +23,25 @@ class UniformPricingCurriculum:
             difficulty =  OpponentDifficulty.EASY,
         ),
 
-        OpponentStage(
-            name = "premium_random_reactive_uniform",
-            opponent_type= "premium_random_reactive_uniform",
-            description =  "Creates random premium opponets which are reactive",
-            difficulty =  OpponentDifficulty.MEDIUM,
-        ),
+        # OpponentStage(
+        #     name = "premium_random_reactive_uniform",
+        #     opponent_type= "premium_random_reactive_uniform",
+        #     description =  "Creates random premium opponets which are reactive",
+        #     difficulty =  OpponentDifficulty.MEDIUM,
+        # ),
      
-        OpponentStage(
-            name = "passive_random_reactive_uniform",
-            opponent_type= "passive_random_reactive_uniform",
-            description =  "Creates random passive opponets which are reactive",
-            difficulty =  OpponentDifficulty.HARD,
-        ),
-        OpponentStage(
-            name = "aggressive_random_reactive_uniform",
-            opponent_type= "aggressive_random_reactive_uniform",
-            description =  "Creates random aggressive opponets which are reactive",
-            difficulty =  OpponentDifficulty.HARD,
-        ),
+        # OpponentStage(
+        #     name = "passive_random_reactive_uniform",
+        #     opponent_type= "passive_random_reactive_uniform",
+        #     description =  "Creates random passive opponets which are reactive",
+        #     difficulty =  OpponentDifficulty.HARD,
+        # ),
+        # OpponentStage(
+        #     name = "aggressive_random_reactive_uniform",
+        #     opponent_type= "aggressive_random_reactive_uniform",
+        #     description =  "Creates random aggressive opponets which are reactive",
+        #     difficulty =  OpponentDifficulty.HARD,
+        # ),
         
         
    ]
