@@ -1,3 +1,5 @@
+import json
+import os
 from typing import Any, Dict
 
 import numpy as np
@@ -7,16 +9,16 @@ from train.uniform_training.uniform_training import TrainingConfig
 price_bounds = {
     "aggressive_uniform": {
         "min" : 0.5,
-        "max": 2.5
+        "max": 5.0
     }
     ,
     "passive_uniform": {
-        "min": 1.5,
-        "max": 3.5
+        "min": 0.5,
+        "max": 5.0
 
     },
     "premium_uniform": {
-        "min": 3.0,
+        "min": 0.5,
         "max": 5.0
     }
 }
@@ -24,16 +26,17 @@ price_bounds = {
 
 
 
-def grid_search(opponent_type: str) -> Dict[str, Any]:
+def grid_search(opponent_type: str, step: float) -> Dict[str, Any]:
     p_bounds= price_bounds.get(opponent_type)
     assert p_bounds
     min_price , max_price = p_bounds['min'],p_bounds['max']
-    grid = np.arange(min_price, max_price, 0.01)
+    grid = np.arange(min_price, max_price, step)
     prices = []
     profits = []
     market_shares = []
     demands = []
-
+    results_path = f"./optimization/uniform_pricing/results/{opponent_type}"
+    os.makedirs(results_path, exist_ok=True)
     config = TrainingConfig(opponent_type=opponent_type)
 
     for price in grid:
@@ -78,12 +81,18 @@ def grid_search(opponent_type: str) -> Dict[str, Any]:
 
     market_shares = np.array(market_shares)
     demands = np.array(demands)
-    return {
-        "prices": prices,
-        "profits": profits,
+    metrics_dict = {
+        "prices": prices.tolist(),
+        "profits": profits.tolist(),
         "optimal_idx": optimal_idx ,
-        "market_shares": market_shares,
-        "demands": demands
+        "market_shares": market_shares.tolist(),
+        "demands": demands.tolist()
     }
 
+    metrics_path = os.path.join(results_path, f"optimization_{opponent_type}.json")
+    
+    with open(metrics_path, 'w') as f:
+        json.dump(metrics_dict, f, indent=2)
+   
+    return metrics_dict
 
