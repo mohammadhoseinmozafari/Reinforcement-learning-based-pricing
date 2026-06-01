@@ -13,10 +13,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Normal
 import numpy as np
-from collections import deque
 
-from models.buffer import BaseReplayBuffer, CurriculumReplayBuffer
-from train import config
+from models.buffer import BaseReplayBuffer
 
 
 
@@ -274,7 +272,9 @@ class SAC:
         # Entropy coefficient (alpha)
         if auto_alpha:
             # Target entropy is -dim(A) by default
-            self.target_entropy = target_entropy if target_entropy else -action_dim
+            self.target_entropy = (target_entropy 
+                                   if target_entropy is not None 
+                                   else -action_dim)
             self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
             self.alpha = self.log_alpha.exp().item()
             self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr_alpha)
@@ -475,11 +475,17 @@ class SAC:
     def reset_optimizers(self):
         """Clear Adam momentum/history."""
 
-        self.actor_optimizer.state.clear()
-        self.critic_optimizer.state.clear()
+        self.actor_optimizer = optim.Adam(
+                self.actor.parameters(),
+                lr=self.actor_optimizer.param_groups[0]["lr"]
+            )
 
-        if self.alpha_optimizer is not None:
-            self.alpha_optimizer.state.clear()
+        self.critic_optimizer = optim.Adam(
+            self.critic.parameters(),
+            lr=self.critic_optimizer.param_groups[0]["lr"]
+        )
+
+        
     
     def reset_target_networks(self):
         self.critic_target.load_state_dict(
@@ -521,8 +527,12 @@ class SAC:
         self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
         self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state_dict'])
         
-        if self.auto_alpha and checkpoint['log_alpha'] is not None:
-            self.log_alpha = checkpoint['log_alpha']
+        if (
+            self.auto_alpha is not None 
+            and checkpoint['log_alpha'] is not None
+            and self.log_alpha is not None
+            ):
+            self.log_alpha.data.copy_( checkpoint['log_alpha'].data) 
             if self.alpha_optimizer is not None and checkpoint['alpha_optimizer_state_dict'] is not None:
                 self.alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
         

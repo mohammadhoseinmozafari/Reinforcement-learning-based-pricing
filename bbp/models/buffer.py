@@ -1,11 +1,25 @@
+from abc import ABC, abstractmethod
 from collections import defaultdict
+from unittest.mock import Base
 import numpy as np
 from collections import deque
 import random
 from typing import Dict, Optional, Tuple
 
 from train.uniform_training.curriculum import Curriculum
-class ReplayBuffer:
+class BaseReplayBuffer(ABC):
+    @abstractmethod
+    def push(self , state, action , reward, next_state, done):
+        raise NotImplementedError
+    @abstractmethod
+    def sample(self, batch_size):
+        raise NotImplementedError
+
+    @abstractmethod
+    def __len__(self):
+        raise NotImplementedError
+
+class ReplayBuffer(BaseReplayBuffer):
     def __init__(self, capacity: int) -> None:
         self.buffer = deque(maxlen=capacity)
   
@@ -47,7 +61,7 @@ class ReplayBuffer:
         return len(self.buffer)
 
 
-class CurriculumReplayBuffer:
+class CurriculumReplayBuffer(BaseReplayBuffer):
     """
     Maintains one replay buffer per curriculum stage and
     performs mixed sampling to prevent catastrophic forgetting.
@@ -199,3 +213,62 @@ class CurriculumReplayBuffer:
             np.array(next_states),
             np.array(dones, dtype=np.float32),
         )
+    
+
+
+class RecencyBiasReplayBuffer(BaseReplayBuffer):
+    """Experience Replay Buffer which cares more about the recent experiences."""
+    
+    def __init__(self, capacity: int, recent_bias: float = 0.3):
+        self.buffer = deque(maxlen=capacity)
+        self.insertion_order = deque(maxlen=capacity)  # Track insertion time
+        self.total_insertions = 0
+        self.recent_bias = recent_bias  
+    
+    def push(self, state, action, reward, next_state, done):
+        """Store a transition in the buffer."""     
+        self.buffer.append((state, action, reward, next_state, done))
+        self.insertion_order.append(self.total_insertions)
+        self.total_insertions+=1
+    
+    def sample(self, batch_size: int):
+        """Sample a batch of transitions."""
+        if len(self.buffer)< batch_size:
+            return self._sample_uniform(batch_size)
+        
+        insertion_times = np.array(self.insertion_order)
+        max_time = insertion_times.max()
+        time_diffs = max_time- insertion_times
+        weights = np.exp(-self.recent_bias*time_diffs / len(self.buffer))
+        weights = weights/weights.sum()
+
+        indices = np.random.choice(len(self.buffer),
+                                   size = batch_size,
+                                   p = weights,
+                                   replace=False)
+        
+        batch = [self.buffer[i] for i in indices]
+        states, actions, rewards, next_states, dones = zip(*batch)
+        
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards, dtype=np.float32),
+            np.array(next_states),
+            np.array(dones, dtype=np.float32)
+        )
+    
+    def _sample_uniform(self, batch_size) :
+            batch = random.sample(self.buffer, batch_size)
+            states, actions, rewards, next_states, dones = zip(*batch)
+        
+            return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards, dtype=np.float32),
+            np.array(next_states),
+            np.array(dones, dtype=np.float32)
+        )
+
+    def __len__(self):
+        return len(self.buffer)
