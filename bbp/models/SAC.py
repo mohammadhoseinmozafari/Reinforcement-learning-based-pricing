@@ -14,108 +14,12 @@ import torch.optim as optim
 from torch.distributions import Normal
 import numpy as np
 from collections import deque
-import random
 
+from models.buffer import BaseReplayBuffer, CurriculumReplayBuffer
 from train import config
 
-class ReplayBuffer:
-    def __init__(self, capacity: int) -> None:
-        self.buffer = deque(maxlen=capacity)
-  
-    
-    def push(self, state, action, reward, next_state, done) -> None:
-        """Store a transition in the buffer."""     
-        self.buffer.append((state, action, reward, next_state, done))
-
-    
-    def sample(self, batch_size: int):
-        """Sample a batch of transitions."""
-        
-        return self._sample_uniform(batch_size)
-        
-        
-    
-    def _sample_uniform(self, batch_size) :
-            batch = random.sample(self.buffer, batch_size)
-            states, actions, rewards, next_states, dones = zip(*batch)
-        
-            return (
-            np.array(states),
-            np.array(actions),
-            np.array(rewards, dtype=np.float32),
-            np.array(next_states),
-            np.array(dones, dtype=np.float32)
-        )
-
-    def clear(self, retain_fraction: Optional[float] = 0.0) -> None :
-        if not retain_fraction or retain_fraction <= 0.0:
-            self.buffer.clear()
-            return
-        keep_count = int(len(self.buffer)*retain_fraction)
-        retained = list (self.buffer)[-keep_count:]
-        self.buffer.clear()
-        self.buffer.extend(retained)
-        
-    def __len__(self):
-        return len(self.buffer)
 
 
-class RecencyBiasReplayBuffer:
-    """Experience Replay Buffer which cares more about the recent experiences."""
-    
-    def __init__(self, capacity: int, recent_bias: float = 0.3):
-        self.buffer = deque(maxlen=capacity)
-        self.insertion_order = deque(maxlen=capacity)  # Track insertion time
-        self.total_insertions = 0
-        self.recent_bias = recent_bias  
-    
-    def push(self, state, action, reward, next_state, done):
-        """Store a transition in the buffer."""     
-        self.buffer.append((state, action, reward, next_state, done))
-        self.insertion_order.append(self.total_insertions)
-        self.total_insertions+=1
-    
-    def sample(self, batch_size: int):
-        """Sample a batch of transitions."""
-        if len(self.buffer)< batch_size:
-            return self._sample_uniform(batch_size)
-        
-        insertion_times = np.array(self.insertion_order)
-        max_time = insertion_times.max()
-        time_diffs = max_time- insertion_times
-        weights = np.exp(-self.recent_bias*time_diffs / len(self.buffer))
-        weights = weights/weights.sum()
-
-        indices = np.random.choice(len(self.buffer),
-                                   size = batch_size,
-                                   p = weights,
-                                   replace=False)
-        
-        batch = [self.buffer[i] for i in indices]
-        states, actions, rewards, next_states, dones = zip(*batch)
-        
-        return (
-            np.array(states),
-            np.array(actions),
-            np.array(rewards, dtype=np.float32),
-            np.array(next_states),
-            np.array(dones, dtype=np.float32)
-        )
-    
-    def _sample_uniform(self, batch_size) :
-            batch = random.sample(self.buffer, batch_size)
-            states, actions, rewards, next_states, dones = zip(*batch)
-        
-            return (
-            np.array(states),
-            np.array(actions),
-            np.array(rewards, dtype=np.float32),
-            np.array(next_states),
-            np.array(dones, dtype=np.float32)
-        )
-
-    def __len__(self):
-        return len(self.buffer)
 
 
 class Actor(nn.Module):
@@ -302,6 +206,7 @@ class SAC:
         target_entropy: Target entropy for automatic alpha tuning
         buffer_size: Replay buffer capacity
         batch_size: Training batch size
+        curriculum_learning : whether agent learns through curriculum or not 
         device: Device to run on (cuda/cpu)
     """
     
@@ -309,6 +214,7 @@ class SAC:
         self,
         state_dim: int,
         action_dim: int,
+        replay_buffer : BaseReplayBuffer ,
         action_scale: float = 1.0,
         hidden_dim: int = 256,
 
@@ -324,9 +230,8 @@ class SAC:
         target_entropy: Optional[float] = None,
         log_std_min: float = -10.0,
         log_std_max: float = -1.0,
-        buffer_size: int = 1000000,
         grad_clip_norm : float = 1.0,
-        batch_size: int = 256,
+        batch_size : int = 256,
         lr_scheduler : Optional[str] = None,
         lr_scheduler_kwargs: Optional[Dict] = None,
         device: Optional[str] = None
@@ -339,8 +244,8 @@ class SAC:
         self.tau = tau
         self.log_std_min = log_std_min
         self.log_std_max = log_std_max
-
         self.batch_size = batch_size
+
         self.auto_alpha = auto_alpha
         self.initial_alpha = alpha
         self.grad_clip_norm = grad_clip_norm
@@ -390,9 +295,7 @@ class SAC:
             self.alpha_optimizer, lr_scheduler, lr_scheduler_kwargs
         ) if self.alpha_optimizer is not None else None
         
-
-        # Replay buffer
-        self.replay_buffer = ReplayBuffer(buffer_size)
+        self.replay_buffer = replay_buffer
         
         # Training info
         self.total_steps = 0
@@ -507,7 +410,12 @@ class SAC:
         
         # Update alpha (entropy coefficient)
         alpha_loss = None
-        if self.auto_alpha and self.log_alpha is not None and self.alpha_optimizer is not None and self.target_entropy:
+        if (
+            self.auto_alpha
+            and self.log_alpha is not None 
+            and self.alpha_optimizer is not None 
+            and self.target_entropy is not None
+            ):
             alpha_loss = -(self.log_alpha * (log_probs.detach() + self.target_entropy)).mean()
             
             self.alpha_optimizer.zero_grad()
@@ -548,7 +456,11 @@ class SAC:
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
     
     def reset_alpha(self):
-        if self.auto_alpha and self.log_alpha and self.alpha_optimizer:
+        if (
+            self.auto_alpha 
+            and self.log_alpha is not None
+            and self.alpha_optimizer is not None
+            ):
             with torch.no_grad():
                 self.log_alpha.fill_(np.log(self.initial_alpha))
 
@@ -568,6 +480,11 @@ class SAC:
 
         if self.alpha_optimizer is not None:
             self.alpha_optimizer.state.clear()
+    
+    def reset_target_networks(self):
+        self.critic_target.load_state_dict(
+            self.critic.state_dict()
+        )
     def get_current_lrs(self) -> Dict[str, float]:
         """Get current learning rates."""
         lrs = {

@@ -12,6 +12,7 @@ import numpy as np
 
 from config.constants import EPISODE_LENGTH, NUM_CONSUMERS
 from env.uniform_pricing_env import UniformPricingEnv
+from train.uniform_training.curriculum import Curriculum
 
 # =============================================================================
 # OPPONENT DIFFICULTY LEVELS
@@ -48,7 +49,7 @@ class OpponentStage:
 @dataclass
 class CurriculumConfig:
     """Configuration for opponent curriculum learning."""
-    
+    curriculum : Curriculum
     # Curriculum stages
     stages: List[OpponentStage] = field(default_factory=list)
     
