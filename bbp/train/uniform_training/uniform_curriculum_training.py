@@ -52,7 +52,16 @@ def train_with_curriculum(
             marker = " ← START" if i == 0 else ""
             print(f"  Stage {i+1}: {opp}{marker}")
         print("=" * 55)
+    
+    # create replay buffer
     replay_buffer = CurriculumReplayBuffer(capacity=config.buffer_size, batch_size=config.batch_size, curriculum=curriculum_config.curriculum)
+    if verbose:
+        print("=" * 55)
+        print("REPLAY BUFFER INITIALIZATION")
+        print("=" * 55)
+        print (f"Replay buffers: {replay_buffer.buffers.keys()}")
+        
+
     # Create SAC agent
     agent = SAC(
         state_dim=state_dim,
@@ -196,10 +205,13 @@ def train_with_curriculum(
             
                 agent.replay_buffer.set_stage(
                     new_opponent.opponent_type
-                ) 
+                )
+                if verbose:
+                    print(f"Replay buffer stage changed, current replay buffer stage: {agent.replay_buffer.current_stage}") 
+                    print(agent.replay_buffer.get_info())
                 agent.reset_optimizers()
                 agent.reset_target_networks()
-                
+
                 if verbose:
                     print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
                 state, _ = env.reset(seed = config.seed)

@@ -1,22 +1,15 @@
 from typing import List
 
 from train.curriculum import OpponentDifficulty, OpponentStage
+from train.curriculum import Curriculum
 
-class Curriculum : 
-    def __init__(self) -> None:
-        self.opponent_sequence : List[OpponentStage] = []
 
 class UniformPricingCurriculum(Curriculum):
     """Manages opponent difficulty progression."""
     def __init__(self) -> None:
         super().__init__()
         self.opponent_sequence = [
-                            OpponentStage(
-                                name = "passive_uniform",
-                                opponent_type =  "passive_uniform",
-                                description =  "Fixed price 2.5, more competitive",
-                                difficulty =  OpponentDifficulty.TUTORIAL,
-                            ),
+
 
                             OpponentStage(
                                 name = "premium_uniform",
@@ -24,6 +17,13 @@ class UniformPricingCurriculum(Curriculum):
                                 description =  "Fixed price 4, never changes",
                                 difficulty =  OpponentDifficulty.TUTORIAL,
                             ),
+                            OpponentStage(
+                                name = "passive_uniform",
+                                opponent_type =  "passive_uniform",
+                                description =  "Fixed price 2.5, more competitive",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+
                             
                             OpponentStage(
                                 name = "aggressive_uniform",

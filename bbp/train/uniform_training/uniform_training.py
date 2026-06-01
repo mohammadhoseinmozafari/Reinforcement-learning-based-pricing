@@ -24,6 +24,7 @@ import os
 
 from env.uniform_pricing_env import  make_uniform_pricing_env
 from models.SAC import SAC
+from models.buffer import ReplayBuffer
 from models.reward_normalizer import EpisodeRewardNormalizer
 import gymnasium as gym
 
@@ -76,6 +77,7 @@ def train_uniform_pricing(
         print(f"Episodes: {config.num_episodes}")
         print("=" * 60)
     
+    replay_buffer = ReplayBuffer(config.buffer_size)
     # Create SAC agent
     agent = SAC(
         state_dim=state_dim,
@@ -89,7 +91,7 @@ def train_uniform_pricing(
         tau=config.tau,
         alpha=config.alpha,
         auto_alpha=config.auto_alpha,
-        buffer_size=config.buffer_size,
+        replay_buffer= replay_buffer,
         batch_size=config.batch_size,
     )
     

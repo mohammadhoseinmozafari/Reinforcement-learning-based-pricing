@@ -12,7 +12,6 @@ import numpy as np
 
 from config.constants import EPISODE_LENGTH, NUM_CONSUMERS
 from env.uniform_pricing_env import UniformPricingEnv
-from train.uniform_training.curriculum import Curriculum
 
 # =============================================================================
 # OPPONENT DIFFICULTY LEVELS
@@ -40,7 +39,9 @@ class OpponentStage:
     max_episodes: Optional[int] = None  # None = unlimited until mastered
     
  
- 
+class Curriculum : 
+    def __init__(self) -> None:
+        self.opponent_sequence : List[OpponentStage] = []
 
 # =============================================================================
 # CURRICULUM SCHEDULER

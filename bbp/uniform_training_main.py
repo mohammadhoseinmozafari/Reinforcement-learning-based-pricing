@@ -16,13 +16,15 @@ def main():
         eval_freq=10,
         save_freq=100,
     )
-    curr_config = CurriculumConfig(
-    stages= UniformPricingCurriculum().OPPONENT_SEQUENCE,
+    curriculum = UniformPricingCurriculum()
 
+    curr_config = CurriculumConfig(
+    curriculum=curriculum,
+    stages=curriculum.opponent_sequence,
     window_size=20,
     change_threshold=0.03,
-    min_episodes_per_stage=100,
-    max_episodes_per_stage=400
+    min_episodes_per_stage=20,
+    max_episodes_per_stage=30
     
 )
     

@@ -76,20 +76,6 @@ class CurriculumReplayBuffer(BaseReplayBuffer):
        
         self.current_stage = curriculum.opponent_sequence[0].opponent_type
 
-        # self.sampling_weights = {
-        #     "premium_uniform": {
-        #         "premium_uniform": 1.0,
-        #     },
-        #     "passive_uniform": {
-        #         "premium_uniform": 0.20,
-        #         "passive_uniform": 0.80,
-        #     },
-        #     "aggressive_uniform": {
-        #         "premium_uniform": 0.15,
-        #         "passive_uniform": 0.15,
-        #         "aggressive_uniform": 0.70,
-        #     }
-        # }
     
     def _create_buffers(self, curriculum: Curriculum)-> Dict[str, ReplayBuffer]:
         stages = curriculum.opponent_sequence
@@ -213,6 +199,12 @@ class CurriculumReplayBuffer(BaseReplayBuffer):
             np.array(next_states),
             np.array(dones, dtype=np.float32),
         )
+    
+    def get_info(self):
+        lens = {}
+        for stage, buffer in self.buffers.items():
+            lens[stage] = len(buffer)
+        return lens
     
 
 
