@@ -47,8 +47,15 @@ class ReplayBuffer:
             np.array(dones, dtype=np.float32)
         )
 
-    def clear(self) :
+    def clear(self, retain_fraction: Optional[float] = 0.0) -> None :
+        if not retain_fraction or retain_fraction <= 0.0:
+            self.buffer.clear()
+            return
+        keep_count = int(len(self.buffer)*retain_fraction)
+        retained = list (self.buffer)[-keep_count:]
         self.buffer.clear()
+        self.buffer.extend(retained)
+        
     def __len__(self):
         return len(self.buffer)
 
@@ -500,7 +507,7 @@ class SAC:
         
         # Update alpha (entropy coefficient)
         alpha_loss = None
-        if self.auto_alpha and self.log_alpha is not None and self.alpha_optimizer is not None:
+        if self.auto_alpha and self.log_alpha is not None and self.alpha_optimizer is not None and self.target_entropy:
             alpha_loss = -(self.log_alpha * (log_probs.detach() + self.target_entropy)).mean()
             
             self.alpha_optimizer.zero_grad()
@@ -541,7 +548,7 @@ class SAC:
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
     
     def reset_alpha(self):
-        if self.auto_alpha:
+        if self.auto_alpha and self.log_alpha and self.alpha_optimizer:
             with torch.no_grad():
                 self.log_alpha.fill_(np.log(self.initial_alpha))
 

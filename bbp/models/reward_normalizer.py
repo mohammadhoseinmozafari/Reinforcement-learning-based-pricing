@@ -26,7 +26,7 @@ class FixedRewardNormalizer(gym.RewardWrapper):
         self,
         env: gym.Env,
         max_price: float = 5.0,
-        num_consumers: int = 100,
+        num_consumers: int = 50,
         clip_reward: bool = False,
     ):
         super().__init__(env)

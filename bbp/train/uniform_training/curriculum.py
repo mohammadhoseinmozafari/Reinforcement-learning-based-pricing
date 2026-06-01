@@ -5,17 +5,19 @@ class UniformPricingCurriculum:
     
     OPPONENT_SEQUENCE = [
         OpponentStage(
-            name = "premium_uniform",
-            opponent_type =  "premium_uniform",
-            description =  "Fixed price 4, never changes",
-            difficulty =  OpponentDifficulty.TUTORIAL,
-        ),
-        OpponentStage(
             name = "passive_uniform",
             opponent_type =  "passive_uniform",
             description =  "Fixed price 2.5, more competitive",
             difficulty =  OpponentDifficulty.TUTORIAL,
         ),
+        
+        OpponentStage(
+            name = "premium_uniform",
+            opponent_type =  "premium_uniform",
+            description =  "Fixed price 4, never changes",
+            difficulty =  OpponentDifficulty.TUTORIAL,
+        ),
+        
         OpponentStage(
             name = "aggressive_uniform",
             opponent_type =  "aggressive_uniform",

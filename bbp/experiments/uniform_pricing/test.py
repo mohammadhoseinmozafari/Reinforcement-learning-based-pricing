@@ -22,7 +22,7 @@ OPPONENT_PRICES = [1.5, 2.5, 4.0, 5.0]   # prices to test against
 NUM_EPISODES = 10                          # episodes per opponent price
 EPISODE_LEN = EPISODE_LENGTH
 NUM_CONSUMERS = 50
-SEED = 52
+SEED = 42
 
 
 def make_test_env(opponent_price: float) -> UniformPricingEnv:
@@ -39,7 +39,7 @@ def make_test_env(opponent_price: float) -> UniformPricingEnv:
 def load_agent(model_path: str) -> SAC:
     """Load a trained SAC agent."""
     agent = SAC(
-        state_dim=7,
+        state_dim=4,
         action_dim=1,
         action_scale=1.0,
         hidden_dim=256,
@@ -65,7 +65,7 @@ def test_agent(agent: SAC, env: UniformPricingEnv, num_episodes: int):
 
         for t in range(EPISODE_LEN):
             action = agent.select_action(state, deterministic=True)
-            action = np.clip(action, 0.0, 1.0)
+            
 
             next_state, reward, terminated, truncated, info = env.step(action)
             ep_reward += reward
