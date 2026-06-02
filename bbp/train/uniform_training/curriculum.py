@@ -29,8 +29,17 @@ class UniformPricingCurriculum(Curriculum):
                                 name = "aggressive_uniform",
                                 opponent_type =  "aggressive_uniform",
                                 description =  "Fixed price 1.5, most competitive",
-                                difficulty =  OpponentDifficulty.EASY,
+                                difficulty =  OpponentDifficulty.TUTORIAL,
                             ),
+
+                            OpponentStage(
+                                name="constant_opponent_mixed",
+                                opponent_type="mixed",
+                                opponent_types = ['premium_uniform', "passive_uniform", "aggressive_uniform"],
+                                description="Mixes all constant opponent policies",
+                                difficulty=OpponentDifficulty.EASY
+
+                            )
 
                             # OpponentStage(
                             #     name = "premium_random_reactive_uniform",
@@ -53,7 +62,14 @@ class UniformPricingCurriculum(Curriculum):
                             # ),
                             
                                 ]
+    def get_sequence(self) -> List[OpponentStage]:
+        sequence = []
+        for stage in self.opponent_sequence:
+            if stage.opponent_type != "mixed":
+                sequence.append(stage)
+        return sequence
   
+
     
   
     

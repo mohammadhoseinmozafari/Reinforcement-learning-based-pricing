@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from collections import deque
 from enum import Enum
 from dataclasses import dataclass, field
@@ -33,15 +34,22 @@ class OpponentStage:
     opponent_type: str
     difficulty: OpponentDifficulty
     description: str
+    opponent_types : Optional[List[str]] = None ## for mixed stages
+    
     
     # How many episodes to spend in this stage (if not using performance-based)
     min_episodes: int = 100
     max_episodes: Optional[int] = None  # None = unlimited until mastered
+
     
  
 class Curriculum : 
     def __init__(self) -> None:
         self.opponent_sequence : List[OpponentStage] = []
+    @abstractmethod
+    def get_sequence(self):
+        raise NotImplementedError
+    
 
 # =============================================================================
 # CURRICULUM SCHEDULER
