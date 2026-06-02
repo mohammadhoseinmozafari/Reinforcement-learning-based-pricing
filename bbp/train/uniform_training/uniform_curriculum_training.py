@@ -6,9 +6,7 @@ from env import make_uniform_pricing_env
 from models.SAC import SAC
 from models.buffer import CurriculumReplayBuffer
 from train.config import TrainingConfig
-from train.uniform_training.curriculum import UniformPricingCurriculum
-from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
-from models.reward_normalizer import EpisodeRewardNormalizer
+from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler, OpponentStage
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 from models.reward_normalizer import FixedRewardNormalizer
@@ -21,13 +19,16 @@ def train_with_curriculum(
     np.random.seed(config.seed)
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
+
+    
     base_env = make_uniform_pricing_env(
-        opponent=curriculum.current_opponent,
+        opponent= curriculum.current_opponent,
         num_consumers = config.num_consumers,
         episode_length = config.episode_length,
         seed = config.seed
         
     )
+
     env = FixedRewardNormalizer(base_env)
     assert env.observation_space.shape
     assert env.action_space.shape
@@ -50,8 +51,9 @@ def train_with_curriculum(
         print("-" * 55)
         for i, opp in enumerate(curriculum_config.stages):
             marker = " ← START" if i == 0 else ""
-            print(f"  Stage {i+1}: {opp}{marker}")
-        print("=" * 55)
+            print(f"  Stage {i+1}: opponent name: {opp.name} opponent description: {opp.description}{marker}")
+        print("-" * 55)
+        print()
     
     # create replay buffer
     replay_buffer = CurriculumReplayBuffer(capacity=config.buffer_size, batch_size=config.batch_size, curriculum=curriculum_config.curriculum)
@@ -59,7 +61,12 @@ def train_with_curriculum(
         print("=" * 55)
         print("REPLAY BUFFER INITIALIZATION")
         print("=" * 55)
-        print (f"Replay buffers: {replay_buffer.buffers.keys()}")
+
+        for buffer, len in replay_buffer.get_info().items():
+            print(f"Replay buffer: {buffer} | length : {len}")
+        print("-" * 55)
+        print()
+
         
 
     # Create SAC agent
@@ -81,8 +88,14 @@ def train_with_curriculum(
         log_std_max=config.log_std_max
     )
     if verbose:
+        print("=" * 55)
         print("SAC Configuration")
-        print(agent.get_info())
+        print("=" * 55)
+        for param, value in agent.get_info().items():
+            print (f"parameter {param} : {value}")
+        print("-" * 55)
+        print()
+
 
     metrics = TrainingMetrics()
     # =========================================
@@ -91,7 +104,6 @@ def train_with_curriculum(
     if verbose:
         print(f"\nWarming up with {config.warmup_steps} random steps...")
     
-
     state, _ = env.reset(seed = config.seed)
     for _ in range (config.warmup_steps):
         action = env.action_space.sample()
@@ -104,12 +116,30 @@ def train_with_curriculum(
     # TRAINING LOOP
     # =========================================
     if verbose:
-        print("Starting training...\n")
+        print("\033[32mStarting training...\033[0m\n")
 
     num_episodes = config.num_episodes
     episode_length = config.episode_length
     updates_per_step = config.updates_per_step
     for episode in range(num_episodes):
+        current_stage = curriculum.current_stage
+        
+        if current_stage.opponent_type == 'mixed':
+            assert current_stage.opponent_types
+            opponent_type = np.random.choice(current_stage.opponent_types)
+            base_env.close()
+            
+           
+            base_env = make_uniform_pricing_env(
+                opponent= opponent_type,
+                num_consumers = config.num_consumers,
+                episode_length = config.episode_length,
+                seed = config.seed
+                
+            )
+            env = FixedRewardNormalizer(base_env)
+
+            agent.replay_buffer.set_stage(opponent_type)
         state, _ = env.reset()
         metrics.reset_episode()
         
@@ -193,9 +223,14 @@ def train_with_curriculum(
                 print("\n" + "=" * 60)
                 print(f"Switching to opponent: {new_opponent.opponent_type}")
                 print("=" * 60)
+                
                 base_env.close()
+                if new_opponent.opponent_type =="mixed":
+                    print(f"Entering the mixed stage with opponent types : {new_opponent.opponent_types}")
+                else:
+                    opponent_type = new_opponent.opponent_type
                 base_env = make_uniform_pricing_env(
-                    opponent=new_opponent.opponent_type,
+                    opponent=opponent_type,
                     num_consumers = config.num_consumers,
                     episode_length = config.episode_length,
                     seed= config.seed+ episode,
@@ -204,24 +239,27 @@ def train_with_curriculum(
                 env = FixedRewardNormalizer(base_env)
             
                 agent.replay_buffer.set_stage(
-                    new_opponent.opponent_type
+                    opponent_type
                 )
                 if verbose:
                     print(f"Replay buffer stage changed, current replay buffer stage: {agent.replay_buffer.current_stage}") 
                     print(agent.replay_buffer.get_info())
-                agent.reset_optimizers()
-                agent.reset_target_networks()
-
-                if verbose:
-                    print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
-                state, _ = env.reset(seed = config.seed)
-                for _ in range (config.warmup_steps):
-                    action = env.action_space.sample()
-                    next_state, reward, terminated, truncated, info = env.step(action)
-                    done = terminated or truncated
-                    agent.replay_buffer.push(state, action, reward, next_state, done)
-                    state = next_state if not done else env.reset()[0]
                 
+                
+                if new_opponent.opponent_type != 'mixed':
+                    
+                    agent.reset_optimizers()
+                    agent.reset_target_networks()
+                    if verbose:
+                        print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
+                    state, _ = env.reset(seed = config.seed)
+                    for _ in range (config.warmup_steps):
+                        action = env.action_space.sample()
+                        next_state, reward, terminated, truncated, info = env.step(action)
+                        done = terminated or truncated
+                        agent.replay_buffer.push(state, action, reward, next_state, done)
+                        state = next_state if not done else env.reset()[0]
+                  
             
             if (episode + 1) % config.save_freq == 0:
                 save_checkpoint(agent, metrics, config, episode + 1)

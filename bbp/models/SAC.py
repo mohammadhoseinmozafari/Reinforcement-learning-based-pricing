@@ -284,7 +284,6 @@ class SAC:
             self.alpha_optimizer = None
 
     # Learning rate schedulers
-        print("Initializing Schedulers")
         self.actor_scheduler = self._create_scheduler(
             self.actor_optimizer, lr_scheduler, lr_scheduler_kwargs
         )
@@ -558,7 +557,7 @@ class SAC:
 
     def get_info(self):
             return {
-                'gammma': self.gamma,
+                'gamma': self.gamma,
                 'tau': self.tau,
                 'alpha': self.alpha,
                 'auto_alpha': self.auto_alpha,
