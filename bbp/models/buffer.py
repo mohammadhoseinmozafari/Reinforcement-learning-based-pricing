@@ -74,14 +74,14 @@ class CurriculumReplayBuffer(BaseReplayBuffer):
         self.buffers = self._create_buffers(curriculum)
         self.sampling_weights = self._create_sampling_weights(curriculum)
        
-        self.current_stage = curriculum.opponent_sequence[0].opponent_type
+        self.current_stage = curriculum.get_sequence()[0].opponent_type
 
     
     def _create_buffers(self, curriculum: Curriculum)-> Dict[str, ReplayBuffer]:
-        stages = curriculum.opponent_sequence
+        stages = curriculum.get_sequence()
         buffers = {}
         for stage in stages : 
-            buffers[stage.opponent_type] = ReplayBuffer(self.capacity)
+                buffers[stage.opponent_type] = ReplayBuffer(self.capacity)
 
         return buffers
 
@@ -89,7 +89,7 @@ class CurriculumReplayBuffer(BaseReplayBuffer):
         
         assert 0.0 < primal_weight <=1.0 , 'primal_weight must be in (0,1]'
 
-        stages = curriculum.opponent_sequence
+        stages = curriculum.get_sequence()
         
         weights = {}
         
