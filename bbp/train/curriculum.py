@@ -75,6 +75,10 @@ class CurriculumConfig:
     min_episodes_per_stage: int = 30            # Never advance before this many episodes
     max_episodes_per_stage: Optional[int] = 150  # Force advance after this many (None = no limit)
     
+    #mixed stage training
+    mixed_stage : bool = True
+    mixed_stage_episodes : int = 200
+    
     # Environment settings
     num_consumers: int = NUM_CONSUMERS
     episode_length: int = EPISODE_LENGTH
