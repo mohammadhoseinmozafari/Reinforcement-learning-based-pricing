@@ -607,9 +607,16 @@ def create_opponent_policy(
 OPPONENT_PRESETS = {
      "premium_uniform": {
         "policy_type": "constant",
-        "uniform_price": 4.0,
+        "uniform_price": 3.5,
         "price_new": 3.0,
-        "price_old": 4.5,
+        "price_old": 4.0,
+        "regime": 0,
+    },
+    "premium_passive_uniform": {
+        "policy_type": "constant",
+        "uniform_price": 3.0,
+        "price_new": 2.5,
+        "price_old": 3.5,
         "regime": 0,
     },
     "passive_uniform": {
@@ -617,6 +624,14 @@ OPPONENT_PRESETS = {
         "uniform_price": 2.5,
         "price_new": 2.0,
         "price_old": 3.0,
+        "regime": 0,
+    },
+
+    "passive_aggressive_uniform": {
+        "policy_type": "constant",
+        "uniform_price": 2.0,
+        "price_new": 1.5,
+        "price_old": 2.5,
         "regime": 0,
     },
 

@@ -9,16 +9,27 @@ from train.uniform_training.uniform_training import TrainingConfig
 price_bounds = {
     "aggressive_uniform": {
         "min" : 0.5,
-        "max": 5.0
+        "max": 3.0
+    },
+    "passive_aggressive_uniform":{
+        "min": 0.5,
+        "max": 3.0
     }
     ,
     "passive_uniform": {
-        "min": 0.5,
+        "min": 1.0,
+        "max": 4.0
+
+    },
+
+    "premium_passive_uniform": {
+        "min": 1.5,
         "max": 5.0
 
     },
+
     "premium_uniform": {
-        "min": 0.5,
+        "min": 1.5,
         "max": 5.0
     }
 }

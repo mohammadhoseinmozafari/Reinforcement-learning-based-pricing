@@ -110,7 +110,9 @@ def load_data(file_path):
 st.sidebar.header("Optimization Settings")
 options = {
     "aggressive_uniform": "Aggressive Uniform",
+    "passive_aggressive_uniform": "Passive Aggressive Uniform",
     "passive_uniform": "Passive Uniform",
+    "premium_passive_uniform": "Premium Passive Uniform",
     "premium_uniform" : "Premium Uniform"
 }
 
@@ -240,14 +242,26 @@ with col1:
                 title='Price',
                 showgrid=False,
                 zeroline=False,
-                tickfont=dict(size=14)
+                tickfont=dict(
+                    color= 'black',
+                    size=14),
+                title_font = dict(
+                    color = 'black',
+                    size = 16
+                )
             ),
             yaxis=dict(
-                title='Profit',
+                title='Market Share',
                 showgrid=True,
                 gridcolor='#E5E5EA',
                 zeroline=False,
-                tickfont=dict(size=14),
+                tickfont=dict(
+                    color = 'black',
+                    size=14),
+                title_font = dict(
+                    color = 'black',
+                    size = 16
+                )
                 
             ),
             hovermode='x unified',
@@ -276,7 +290,7 @@ with col2:
             mode="markers+text",
             name=f"Optimal: p*={metrics['prices'][optimal_idx]:.2f}",
             marker=dict(color=colors['harsh_gray'], size=12, symbol="circle"),
-            text=[f"d*={metrics['market_shares'][optimal_idx]:.1f}"],
+            text=[f"d*={metrics['market_shares'][optimal_idx]:.2f}"],
             textposition="top center",
             textfont=dict(size=13, color=colors['harsh_gray']),
         )
@@ -316,14 +330,26 @@ with col2:
                 title='Price',
                 showgrid=False,
                 zeroline=False,
-                tickfont=dict(size=14)
+                tickfont=dict(
+                    color= 'black',
+                    size=14),
+                title_font = dict(
+                    color = 'black',
+                    size = 16
+                )
             ),
             yaxis=dict(
                 title='Market Share',
                 showgrid=True,
                 gridcolor='#E5E5EA',
                 zeroline=False,
-                tickfont=dict(size=14),
+                tickfont=dict(
+                    color = 'black',
+                    size=14),
+                title_font = dict(
+                    color = 'black',
+                    size = 16
+                )
                 
             ),
             hovermode='x unified',
