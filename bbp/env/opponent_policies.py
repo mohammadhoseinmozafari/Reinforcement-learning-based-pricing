@@ -679,7 +679,7 @@ OPPONENT_PRESETS = {
     "aggressive_bbp": {
         "policy_type": "constant",
         "uniform_price": 1.5,
-        "price_new": 1.2,
+        "price_new": 1.0,
         "price_old": 2.0,
         "regime": 1,
     },
