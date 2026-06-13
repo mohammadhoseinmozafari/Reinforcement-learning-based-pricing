@@ -1,13 +1,11 @@
 """
-Phase 2.1 — Uniform Price Learning Environment
+Uniform Price Learning Environment
 
 Simplified single-agent environment for learning optimal uniform pricing.
-- Agent action: scalar price p_uniform (continuous)
-- Opponent uses fixed opponent policy  
+- Agent action: scalar price p_uniform (continuous)  
 - Regime switching is disabled (always uniform pricing)
-- No BBP logic involved
+- Opponent can choose BBP of Uniform pricing strategies
 
-This is a streamlined wrapper specifically for Phase 2.1 experiments.
 """
 
 from typing import Dict, Tuple, Optional, Union
@@ -26,6 +24,10 @@ from env.opponent_policies import (
 from config.constants import (
     NUM_CONSUMERS,
     EPISODE_LENGTH,
+    PRICE_BBP_NEW_MAX,
+    PRICE_BBP_NEW_MIN,
+    PRICE_BBP_OLD_MAX,
+    PRICE_BBP_OLD_MIN,
     PRICE_UNIFORM_MIN,
     PRICE_UNIFORM_MAX,
     RANDOM_SEED,
@@ -37,19 +39,20 @@ class UniformPricingEnv(gym.Env):
     Single-agent environment for uniform pricing only.
     
     Simplifications from full hierarchical environment:
-    - Both firms always use uniform pricing (regime = 0)
+    - Agent  always use uniform pricing (regime = 0)
     - Agent action is a single scalar: uniform price
     - Observation is a flat vector of market features
-    - No strategy controller, no BBP
+    - No strategy controller.
     
-    This focused environment is ideal for Phase 2.1 experiments
+    This focused environment is ideal for 'Uniform pricing experiments'
     where we want to learn optimal uniform pricing against
     a stationary opponent.
+
     """
     
     metadata = {
         "render_modes": [],
-        "name": "uniform_pricing_v0"
+        "name": "uniform_pricing_v1"
     }
     
     def __init__(
@@ -58,7 +61,6 @@ class UniformPricingEnv(gym.Env):
         num_consumers: int = NUM_CONSUMERS,
         episode_length: int = EPISODE_LENGTH,
         seed: Optional[int] = RANDOM_SEED,
-        normalize_obs: bool = True,
     ):
         """
         Initialize uniform pricing environment.
@@ -68,19 +70,16 @@ class UniformPricingEnv(gym.Env):
             num_consumers: Number of consumers in market
             episode_length: Total steps per episode
             seed: Random seed for reproducibility
-            normalize_obs: If True, normalize observations to roughly [-1, 1]
         """
         super().__init__()
         
         self.num_consumers = num_consumers
         self.episode_length = episode_length
         self.seed_value = seed
-        self.normalize_obs = normalize_obs
         
-        # Create market simulator
         self.market = HotellingMarket(num_consumers=num_consumers, seed=seed)
         
-        # Set up opponent policy (default: constant uniform pricing)
+
         if opponent_policy is None:
             self.opponent_policy = ConstantOpponentPolicy(
                 uniform_price=3.5,
@@ -88,8 +87,7 @@ class UniformPricingEnv(gym.Env):
             )
         else:
             self.opponent_policy = opponent_policy
-            # Force opponent to uniform regime
-            self.opponent_policy.regime = 0
+
         
         # =====================================
         # ACTION SPACE: Single uniform price
@@ -107,25 +105,26 @@ class UniformPricingEnv(gym.Env):
         # =====================================
         # Flat observation vector with key market features
         # Features:
-        #   - own_market_share (1)
-        #   - own_price (1)  
-        #   - opponent_price (1)
-        #   - last_demand_ratio (1)
-        obs_dim = 4
+        #   - own_market_share 
+        #   - own_price 
+        #   - opponent_price_uniform
+        #   - opponent_price_new
+        #   - opponent_price_old
+        #   - last_demand_ratio 
+        #   - opponent regime
+
+
+        obs_dim = 7
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
             shape=(obs_dim,),
             dtype=np.float32
         )
-        
-        # =====================================
-        # STATE TRACKING
-        # =====================================
+
         self._timestep = 0
-        self._last_action = 0.5  # Normalized action
+        self._last_action = 0.5  
         
-        # Metrics tracking for logging
         self._episode_profits = []
         self._episode_prices = []
         self._episode_market_shares = []
@@ -143,6 +142,30 @@ class UniformPricingEnv(gym.Env):
         normalized =  (price - PRICE_UNIFORM_MIN) / (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN)
         normalized = 2.0 * normalized - 1.0
         return normalized
+    
+    def _bbp_price_to_normalized (self , price_new: float, price_old : float) -> Tuple[float, float]:
+        price_new_normalized = (price_new- PRICE_BBP_NEW_MIN) / (PRICE_BBP_NEW_MAX - PRICE_BBP_NEW_MIN)
+        price_old_normalized = (price_old- PRICE_BBP_OLD_MIN) / (PRICE_BBP_OLD_MAX - PRICE_BBP_OLD_MIN)
+        price_new_normalized , price_old_normalized = price_new_normalized* 2.0 -1 , price_old_normalized* 2.0 - 1
+        return price_new_normalized , price_old_normalized
+
+    def _normalize_market_share (self, market_share: float) -> float:
+        """Convert market share to normalized [-1, 1]"""
+        normalized = market_share*2.0 -1
+        return normalized
+    
+    def _normalize_demand_ratio (self, demand_ratio : float) -> float:
+        """Convert demand ratio to normalized [-1, 1]"""
+        normalized = demand_ratio* 2.0 -1
+        return normalized
+    
+    def _normalize_regime(self, regime : int) -> float:
+        """Conver regime to normalized [-1, 1]"""
+        normalized = float(regime) * 2.0 - 1.0
+        return normalized
+
+    
+    
     def _get_observation(self) -> np.ndarray:
         """
         Build observation vector from current market state.
@@ -154,18 +177,17 @@ class UniformPricingEnv(gym.Env):
         opponent = self.market.firms[1]
         
         # Market share
-        market_share = firm.market_share
+        market_share_norm = self._normalize_market_share(firm.market_share)
         
         # Prices (normalized)
-        own_price_norm = self._price_to_normalized(firm.uniform_price)
-        opp_price_norm = self._price_to_normalized(opponent.uniform_price)
-        
+        own_uniform_price_norm = self._price_to_normalized(firm.uniform_price)
+        opp_uniform_price_norm = self._price_to_normalized(opponent.uniform_price)
+        opp_price_new_norm , opp_price_old_norm = self._bbp_price_to_normalized(opponent.price_new, opponent.price_old)
         # Demand ratio
         demand_ratio = firm.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.0
+        demand_ratio_norm = self._normalize_demand_ratio (demand_ratio)
         
-        # Time progress
-        # time_progress = self._timestep / self.episode_length if self.episode_length > 0 else 0.0
-        
+        opponent_regime_norm = self._normalize_regime(opponent.pricing_regime)
         # Profit trend
         # profit_trend = firm.get_profit_trend()
         
@@ -173,20 +195,15 @@ class UniformPricingEnv(gym.Env):
         # pop_change = firm.get_popularity_change()
         
         obs = np.array([
-            market_share,
-            own_price_norm,
-            opp_price_norm,
-            demand_ratio,
+            market_share_norm,
+            own_uniform_price_norm,
+            opp_uniform_price_norm,
+            opp_price_new_norm,
+            opp_price_old_norm,
+            demand_ratio_norm,
+            opponent_regime_norm
         ], dtype=np.float32)
         
-        if self.normalize_obs:
-            # Rough normalization to [-1, 1] range
-            # market_share, demand_ratio already in [0, 1]
-            # prices normalized to [0, 1]
-            # time_progress in [0, 1]
-            # profit_trend in [-1, 1]
-            # pop_change roughly in [-1, 1]
-            obs = obs * 2.0 - 1.0  # Map [0, 1] to [-1, 1]
         
         return obs
     
@@ -194,14 +211,22 @@ class UniformPricingEnv(gym.Env):
         """Create opponent observation from current market state."""
         opponent = self.market.firms[1]
         firm = self.market.firms[0]
+        opp_market_share = opponent.market_share 
+        competitor_market_share = firm.market_share
+        own_uniform_price = opponent.uniform_price
+        own_price_new = opponent.price_new
+        own_price_old = opponent.price_old
+        competitor_uniform_price = firm.uniform_price
         
         return OpponentObservation(
-            market_share=opponent.market_share,
-            competitor_market_share=firm.market_share,
-            own_uniform_price=opponent.uniform_price,
-            competitor_uniform_price=firm.uniform_price,
+            market_share=opp_market_share,
+            competitor_market_share= competitor_market_share,
+            own_uniform_price=own_uniform_price,
+            own_price_new = own_price_new,
+            own_price_old = own_price_old,
+            competitor_uniform_price=competitor_uniform_price,
             last_demand_ratio=opponent.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.5,
-            own_regime=0,  # Always uniform
+            own_regime=opponent.pricing_regime,  # Always uniform
             competitor_regime=0,  # Always uniform
             timestep=self._timestep,
             episode_length=self.episode_length,
@@ -229,8 +254,8 @@ class UniformPricingEnv(gym.Env):
         # Reset market
         self.market.reset(seed=self.seed_value)
         
-        # Force both firms to uniform regime
-        self.market.set_regimes(0, 0)
+        # Force agent to uniform regime
+        self.market.set_regimes(0, self.opponent_policy.regime)
         
         # Reset opponent policy
         self.opponent_policy.reset(seed=seed)
@@ -275,7 +300,7 @@ class UniformPricingEnv(gym.Env):
         # Get opponent's price from policy
         opp_obs = self._get_opponent_observation()
         opp_prices = self.opponent_policy.get_prices(opp_obs)
-        opp_price = opp_prices["uniform_price"]
+
         
         # Set prices in market
         agent_prices = {
@@ -284,13 +309,13 @@ class UniformPricingEnv(gym.Env):
             "price_old": agent_price,  # Not used but required
         }
         opp_prices_dict = {
-            "uniform_price": opp_price,
-            "price_new": opp_price,
-            "price_old": opp_price,
+            "uniform_price": opp_prices.get("uniform_price", opp_prices.get("price_new", 5.0)),
+            "price_new": opp_prices.get("price_new", opp_prices.get("uniform_price", 5.0)),
+            "price_old": opp_prices.get("price_old", opp_prices.get("price_new", 5.0)),
         }
         
-        # Ensure uniform regime
-        self.market.set_regimes(0, 0)
+        # Ensure uniform regime for agent only
+        self.market.set_regimes(0, self.opponent_policy.regime)
         
         # Execute market step
         demand_0, demand_1 = self.market.step(agent_prices, opp_prices_dict)
@@ -320,7 +345,9 @@ class UniformPricingEnv(gym.Env):
             "price": agent_price,
             "market_share": self.market.firms[0].market_share,
             "demand": demand_0,
-            "opponent_price": opp_price,
+            "opponent_price_uniform": opp_prices_dict['uniform_price'],
+            "opponent_price_new": opp_prices_dict["price_new"],
+            "opponent_price_old": opp_prices_dict["price_old"],
             "opponent_profit": float(self.market.firms[1].last_period_profit),
             "opponent_demand": demand_1,
         }
@@ -366,10 +393,10 @@ def make_uniform_pricing_env(
     """
     if isinstance(opponent, str):
         opponent_policy = create_preset_opponent(opponent)
-        opponent_policy.regime = 0  # Force uniform
+        
     else:
         opponent_policy = opponent
-        opponent_policy.regime = 0
+
     
     print(f'Training is initialized with opponent police: {opponent_policy}')
     return UniformPricingEnv(
