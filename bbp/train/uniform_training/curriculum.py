@@ -9,21 +9,34 @@ class UniformPricingCurriculum(Curriculum):
     def __init__(self) -> None:
         super().__init__()
         self.opponent_sequence = [
-
-
                             OpponentStage(
                                 name = "premium_uniform",
                                 opponent_type =  "premium_uniform",
-                                description =  "Fixed price 4, never changes",
+                                description =  "Fixed price 3.5, easiest",
                                 difficulty =  OpponentDifficulty.TUTORIAL,
                             ),
+
+                            OpponentStage(
+                                name = "premium_passive_uniform",
+                                opponent_type =  "premium_passive_uniform",
+                                description =  "Fixed price 3, between passive and premium",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+
                             OpponentStage(
                                 name = "passive_uniform",
                                 opponent_type =  "passive_uniform",
                                 description =  "Fixed price 2.5, more competitive",
                                 difficulty =  OpponentDifficulty.TUTORIAL,
                             ),
-
+                            
+                            OpponentStage(
+                                name = "passive_aggressive_uniform",
+                                opponent_type =  "passive_aggressive_uniform",
+                                description =  "Fixed price 2.0, more competitive",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+                            
                             
                             OpponentStage(
                                 name = "aggressive_uniform",
@@ -32,14 +45,22 @@ class UniformPricingCurriculum(Curriculum):
                                 difficulty =  OpponentDifficulty.TUTORIAL,
                             ),
 
-                            OpponentStage(
-                                name="constant_opponent_mixed",
-                                opponent_type="mixed",
-                                opponent_types = ['premium_uniform', "passive_uniform", "aggressive_uniform"],
-                                description="Mixes all constant opponent policies",
-                                difficulty=OpponentDifficulty.EASY
+                            # OpponentStage(
+                            #     name = "premium_uniform",
+                            #     opponent_type =  "premium_uniform",
+                            #     description =  "Fixed price 4, never changes",
+                            #     difficulty =  OpponentDifficulty.TUTORIAL,
+                            # ),
 
-                            )
+
+                            # OpponentStage(
+                            #     name="constant_opponent_mixed",
+                            #     opponent_type="mixed",
+                            #     opponent_types = ['premium_uniform', "passive_uniform", "aggressive_uniform"],
+                            #     description="Mixes all constant opponent policies",
+                            #     difficulty=OpponentDifficulty.EASY
+
+                            # )
 
                             # OpponentStage(
                             #     name = "premium_random_reactive_uniform",

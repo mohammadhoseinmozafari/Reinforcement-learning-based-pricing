@@ -94,7 +94,7 @@ class UniformPricingEnv(gym.Env):
         # =====================================
         # ACTION SPACE: Single uniform price
         # =====================================
-        # Action is normalized to [0, 1], scaled to price range internally
+        # Action is normalized to [-1, 1], scaled to price range internally
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,

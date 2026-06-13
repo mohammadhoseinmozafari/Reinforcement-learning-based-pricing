@@ -196,7 +196,7 @@ with col1:
             x=[metrics['prices'][optimal_idx]],
             y=[metrics['profits'][optimal_idx]],
             mode="markers+text",
-            name=f"Optimal: p*={metrics['prices'][optimal_idx]:.2f}",
+            name=f"p*={metrics['prices'][optimal_idx]:.2f}",
             marker=dict(color=colors['harsh_gray'], size=12, symbol="circle"),
             text=[f"π*={metrics['profits'][optimal_idx]:.1f}"],
             textposition="top center",
@@ -232,11 +232,12 @@ with col1:
         
             legend=dict(
                 orientation="h",
-                yanchor="bottom",
                 y=1,
                 xanchor="right",
-                x=1,
-                font=dict(size=12)
+                x= 1,
+                yanchor="bottom",
+
+                font=dict(size=12),
             ),
             xaxis=dict(
                 title='Price',
@@ -267,7 +268,7 @@ with col1:
             hovermode='x unified',
 
         )
-    
+    fig.to_html('lol.html')
     st.plotly_chart(fig)
 with col2:
     st.markdown("#### Market Share vs Price")    

@@ -15,7 +15,7 @@ class TrainingConfig:
     opponent_type: str = "random_reactive_uniform"
     
     # SAC hyperparameters
-    hidden_dim: int = 256
+    hidden_dim: int = 32
     lr_actor: float = 5e-4
     lr_critic: float = 5e-4
     lr_alpha: float = 2e-4
@@ -24,10 +24,10 @@ class TrainingConfig:
     tau: float = 0.005
     auto_alpha: bool = True
     log_std_min : float = -10.0
-    log_std_max: float = 0.5
+    log_std_max: float = 0.1
 
     buffer_size: int = 100000
-    batch_size: int = 512
+    batch_size: int = 256
     alpha: float = 1.0
 
     lr_scheduler : Optional[str] = None

@@ -233,7 +233,7 @@ def train_with_curriculum(
                     opponent=opponent_type,
                     num_consumers = config.num_consumers,
                     episode_length = config.episode_length,
-                    seed= config.seed+ episode,
+                    seed= config.seed,
 
                 )
                 env = FixedRewardNormalizer(base_env)
@@ -248,8 +248,8 @@ def train_with_curriculum(
                 
                 if new_opponent.opponent_type != 'mixed':
                     
-                    agent.reset_optimizers()
-                    agent.reset_target_networks()
+                    # agent.reset_optimizers()
+                    # agent.reset_target_networks()
                     if verbose:
                         print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
                     state, _ = env.reset(seed = config.seed)

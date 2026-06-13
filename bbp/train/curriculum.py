@@ -69,7 +69,7 @@ class CurriculumConfig:
 
     monitor_critic : bool = True
     monitor_actor : bool = True
-    monitor_alpha : bool = True
+    monitor_alpha : bool = False
     
     # Safety nets
     min_episodes_per_stage: int = 30            # Never advance before this many episodes
@@ -78,7 +78,7 @@ class CurriculumConfig:
     #mixed stage training
     mixed_stage : bool = True
     mixed_stage_episodes : int = 200
-    
+
     # Environment settings
     num_consumers: int = NUM_CONSUMERS
     episode_length: int = EPISODE_LENGTH

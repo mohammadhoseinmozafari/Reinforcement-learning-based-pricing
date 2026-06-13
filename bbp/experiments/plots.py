@@ -167,7 +167,7 @@ if data_source == "Upload JSON file":
         st.sidebar.warning("Please upload a JSON file")
         st.stop()
 else:
-        data = load_data("experiments/phase2/phase2_1_uniform_training_results/metrics_final.json")
+        data = load_data("experiments/uniform_pricing/runs/2/metrics_ep700.json")
 
 # DataFrame for episode metrics
 df_metrics = pd.DataFrame({
@@ -468,7 +468,7 @@ with tab1:
         fig.add_trace(go.Scatter(
             x=df_metrics['episode'],
             y=data['episode_prices'],
-            name='Agent Profit',
+            name='Agent Price',
             mode='lines',
             line=dict(color=colors['harsh_blue'], width=1.5),
            
@@ -476,7 +476,7 @@ with tab1:
         fig.add_trace(go.Scatter(
             x=df_metrics['episode'],
             y=data['episode_opponent_prices'],
-            name='Opponent Profit',
+            name='Opponent Price',
             mode='lines',
             line=dict(color=colors['harsh_pink'], width=1.5),
         

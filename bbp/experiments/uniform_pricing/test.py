@@ -14,11 +14,12 @@ from env.uniform_pricing_env import UniformPricingEnv
 from env.opponent_policies import ConstantOpponentPolicy
 from models.SAC import SAC
 from config.constants import EPISODE_LENGTH, PRICE_UNIFORM_MIN, PRICE_UNIFORM_MAX
+from models.buffer import CurriculumReplayBuffer, ReplayBuffer
 
 
 # ── Settings ──────────────────────────────────────────────────
-MODEL_PATH = "experiments/phase2/phase2_1_uniform_training_results/sac_uniform_final.pt"
-OPPONENT_PRICES = [1.5, 2.5, 4.0, 5.0]   # prices to test against
+MODEL_PATH = "experiments/phase2/phase2_1_uniform_training_results/sac_uniform_ep700.pt"
+OPPONENT_PRICES = [1.5, 2.0, 2.5, 3.0, 3.5]   # prices to test against
 NUM_EPISODES = 10                          # episodes per opponent price
 EPISODE_LEN = EPISODE_LENGTH
 NUM_CONSUMERS = 50
@@ -38,11 +39,13 @@ def make_test_env(opponent_price: float) -> UniformPricingEnv:
 
 def load_agent(model_path: str) -> SAC:
     """Load a trained SAC agent."""
+
     agent = SAC(
         state_dim=4,
         action_dim=1,
         action_scale=1.0,
-        hidden_dim=256,
+        hidden_dim=32,
+        replay_buffer=ReplayBuffer(500)
     )
     agent.load(model_path)
     return agent
