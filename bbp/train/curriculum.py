@@ -2,7 +2,6 @@ from abc import abstractmethod
 from collections import deque
 from enum import Enum
 from dataclasses import dataclass, field
-import re
 from typing import (
     Dict,
     Optional,
