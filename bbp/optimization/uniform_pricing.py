@@ -33,7 +33,33 @@ price_bounds = {
         "max": 5.0
     }
 }
+price_bounds = {
+    "aggressive_bbp": {
+        "min" : 0.5,
+        "max": 3.0
+    },
+    "passive_aggressive_bbp":{
+        "min": 0.5,
+        "max": 3.0
+    }
+    ,
+    "passive_bbp": {
+        "min": 1.0,
+        "max": 4.0
 
+    },
+
+    "premium_passive_bbp": {
+        "min": 1.5,
+        "max": 5.0
+
+    },
+
+    "premium_bbp": {
+        "min": 1.5,
+        "max": 5.0
+    }
+}
 
 
 

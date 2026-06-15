@@ -108,21 +108,43 @@ def load_data(file_path):
 
 
 st.sidebar.header("Optimization Settings")
-options = {
+uniform_opponent_type_options = {
     "aggressive_uniform": "Aggressive Uniform",
     "passive_aggressive_uniform": "Passive Aggressive Uniform",
     "passive_uniform": "Passive Uniform",
     "premium_passive_uniform": "Premium Passive Uniform",
     "premium_uniform" : "Premium Uniform"
 }
+bbp_opponent_type_options = {
+    "aggressive_bbp": "Aggressive BBP",
+    "passive_aggressive_bbp": "Passive Aggressive BBP",
+    "passive_bbp": "Passive BBP",
+    "premium_passive_bbp": "Premium Passive BBP",
+    "premium_bbp" : "Premium BBP"
+}
+
+opponent_rigme_options = {
+    "bbp_opponent" : "Behaviour Based Pricing",
+    "uniform_opponent" : "Uniform Pricing"
+}
+
+opponent_regime = st.sidebar.selectbox(
+    "Opponent Regime",
+    options=opponent_rigme_options.keys(),
+    index=0,
+)
+if opponent_regime  == "uniform_opponent":
+    opponent_type_options = uniform_opponent_type_options
+else:
+    opponent_type_options = bbp_opponent_type_options
 
 opponent_type = st.sidebar.selectbox(
     "Opponent Type",
-    options=options.keys(),
+    options=opponent_type_options.keys(),
     index=0,
 )
 
-data = load_data(f"optimization/uniform_pricing/results/{opponent_type}/optimization_{opponent_type}.json")
+data = load_data(f"optimization/uniform_pricing/{opponent_regime}/results/{opponent_type}/optimization_{opponent_type}.json")
 
 
 metrics = pd.DataFrame({
@@ -144,7 +166,7 @@ with col1:
     st.markdown(f"""
     <div class="metric-card">
         <div class="metric-label" style="color:#{colors['harsh_blue'][1:]};">Opponent Type</div>
-        <div class="metric-value">{options[opponent_type]}</div>
+        <div class="metric-value">{opponent_type_options[opponent_type]}</div>
     </div>
     """, unsafe_allow_html=True)
 with col2:
