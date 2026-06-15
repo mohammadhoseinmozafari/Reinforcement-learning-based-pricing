@@ -1,4 +1,5 @@
 from typing import List, Tuple
+from xxlimited import new
 from train.uniform_training.logger import CurriculumTrainingLogger
 import numpy as np
 
@@ -113,6 +114,40 @@ def run_episode(env, agent: SAC, metrics : TrainingMetrics , config: TrainingCon
 
     return episode_reward, episode_critic_loss, episode_actor_loss
 
+def handle_curriculum_advance(curriculum : OpponentCurriculumScheduler, base_env, agent : SAC, config : TrainingConfig, logger: CurriculumTrainingLogger, verbose):
+    """
+    Advance the curriculum if convergence criteria are met.
+    Returns the (possibly new) base_env, env, opponent_type.
+    """
+    new_opponent = curriculum.advance()
+    if new_opponent is None:
+        return None  # signal: no change
+
+    logger.log_stage_transition(new_opponent)  # see below
+
+    base_env.close()
+
+    if new_opponent.opponent_type == "mixed":
+        if verbose:
+            print(f"Entering the mixed stage with opponent types: {new_opponent.opponent_types}")
+        
+    else:
+        opponent_type = new_opponent.opponent_type
+
+        base_env, env = create_environment(config, opponent_type)
+        agent.replay_buffer.set_stage(opponent_type)
+
+    if verbose:
+        print(f"Replay buffer stage changed, current replay buffer stage: {agent.replay_buffer.current_stage}")
+        print(agent.replay_buffer.get_info())
+
+    if new_opponent.opponent_type != 'mixed':
+        if verbose:
+            print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
+        warmup(env=env, replay_buffer=agent.replay_buffer, steps=config.warmup_steps, seed=config.seed)
+
+    return base_env, env, opponent_type
+
 def train_with_curriculum(
         config: TrainingConfig,
         curriculum_config: CurriculumConfig,
@@ -209,41 +244,31 @@ def train_with_curriculum(
 
             logger.log_episode_progress(episode, metrics, agent, eval_reward, curriculum, config)
             logger.log_policy_stats(policy_stats)
+            
             new_opponent = curriculum.advance()
             if new_opponent is not None:
-                print("\n" + "=" * 60)
-                print(f"Switching to opponent: {new_opponent.opponent_type}")
-                print("=" * 60)
+                logger.log_stage_transition(new_opponent)
                 
                 base_env.close()
                 if new_opponent.opponent_type =="mixed":
-                    print(f"Entering the mixed stage with opponent types : {new_opponent.opponent_types}")
+                    assert new_opponent.opponent_types
+                    logger.log_mixed_stage_entry(new_opponent.opponent_types)
                 else:
                     opponent_type = new_opponent.opponent_type
-                base_env = make_uniform_pricing_env(
-                    opponent=opponent_type,
-                    num_consumers = config.num_consumers,
-                    episode_length = config.episode_length,
-                    seed= config.seed,
 
-                )
-                env = FixedRewardNormalizer(base_env)
-            
-                agent.replay_buffer.set_stage(
-                    opponent_type
-                )
-                if verbose:
-                    print(f"Replay buffer stage changed, current replay buffer stage: {agent.replay_buffer.current_stage}") 
-                    print(agent.replay_buffer.get_info())
                 
-                
+                    agent.replay_buffer.set_stage(
+                        opponent_type
+                    )
+                    
+                    logger.log_replay_buffer_stage_change(agent.replay_buffer.current_stage)
+                    logger.log_replay_buffer(agent.replay_buffer)
+                    
+                    
                 if new_opponent.opponent_type != 'mixed':
                     
-                    # agent.reset_optimizers()
-                    # agent.reset_target_networks()
-                    if verbose:
-                        print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
 
+                    logger.log_warmup_new_opponent(new_opponent.opponent_type)
                     warmup (env= env, replay_buffer= agent.replay_buffer, steps = config.warmup_steps, seed= config.seed)
                   
             
