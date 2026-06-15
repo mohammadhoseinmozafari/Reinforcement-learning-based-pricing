@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List
 
 import numpy as np
 
@@ -10,6 +10,215 @@ from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler, Oppo
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 from models.reward_normalizer import FixedRewardNormalizer
+
+class Color:
+    """ANSI color codes for terminal output"""
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    DIM = '\033[2m'
+    END = '\033[0m'
+
+class BoxStyle:
+    """Box drawing characters for different styles"""
+    SIMPLE = {
+        'tl': '┌', 'tr': '┐', 'bl': '└', 'br': '┘',
+        'h': '─', 'v': '│', 'lc': '├', 'rc': '┤'
+    }
+    DOUBLE = {
+        'tl': '╔', 'tr': '╗', 'bl': '╚', 'br': '╝',
+        'h': '═', 'v': '║', 'lc': '╠', 'rc': '╣'
+    }
+    ROUNDED = {
+        'tl': '╭', 'tr': '╮', 'bl': '╰', 'br': '╯',
+        'h': '─', 'v': '│', 'lc': '├', 'rc': '┤'
+    }
+
+class CurriculumTrainingLogger :
+
+    def __init__(self, curriculum_config: CurriculumConfig, verbose: bool = True) -> None:
+        self.curriculum_config = curriculum_config
+        self.verbose = verbose
+        
+    def c(self, color: str, text: str) -> str:
+        return f"{color}{text}{Color.END}"
+    
+    def print_training_header(self) :
+        
+        if not self.verbose:
+            return
+        
+        monitored = []
+
+        if self.curriculum_config.monitor_critic:
+            monitored.append("Critic Loss")
+        if self.curriculum_config.monitor_actor:
+            monitored.append("Actor Loss")
+        if self.curriculum_config.monitor_alpha:
+            monitored.append("Alpha")
+        
+        # Calculate box width based on content
+        max_stage_width = max(
+            (len(f"Stage {i+1}: {opp.name}") for i, opp in enumerate(self.curriculum_config.stages)),
+            default=30
+        )
+        box_width = max(55, max_stage_width + 15)
+        
+        # Choose box style
+        style = BoxStyle.ROUNDED
+        
+        # Header
+        print(f"\n{self.c(Color.CYAN, style['tl'] + style['h'] * (box_width - 2) + style['tr'])}")
+        
+        # Title section
+        title = "CONVERGENCE-BASED CURRICULUM"
+        padding = (box_width - 2 - len(title)) // 2
+        print(f"{self.c(Color.CYAN, style['v'])}{' ' * padding}{self.c(Color.BOLD + Color.YELLOW, title)}{' ' * (box_width - 2 - padding - len(title))}{self.c(Color.CYAN, style['v'])}")
+        
+        print(f"{self.c(Color.CYAN, style['lc'] + style['h'] * (box_width - 2) + style['rc'])}")
+        
+        # Monitoring section
+        monitoring_label = "Monitoring:"
+        monitoring_value = " + ".join(monitored) if monitored else "None"
+        print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD, monitoring_label)} {self.c(Color.GREEN, monitoring_value)}{' ' * (box_width - len(monitoring_label) - len(monitoring_value) - 4)}{self.c(Color.CYAN, style['v'])}")
+        
+        # Threshold
+        threshold_label = "Threshold:"
+        threshold_value = f"{self.curriculum_config.change_threshold * 100:.1f}% change"
+        print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD, threshold_label)} {self.c(Color.GREEN, threshold_value)}{' ' * (box_width - len(threshold_label) - len(threshold_value) - 4)}{self.c(Color.CYAN, style['v'])}")
+        
+        # Window size
+        window_label = "Window:"
+        window_value = f"{self.curriculum_config.window_size} episode{'s' if self.curriculum_config.window_size != 1 else ''}"
+        print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD, window_label)} {self.c(Color.GREEN, window_value)}{' ' * (box_width - len(window_label) - len(window_value) - 4)}{self.c(Color.CYAN, style['v'])}")
+        
+        print(f"{self.c(Color.CYAN, style['lc'] + style['h'] * (box_width - 2) + style['rc'])}")
+        
+        # Stages section
+        stages_label = "Curriculum Stages:"
+        print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD + Color.BLUE, stages_label)}{' ' * (box_width - len(stages_label) - 3)}{self.c(Color.CYAN, style['v'])}")
+        print(f"{self.c(Color.CYAN, style['v'])}{' ' * (box_width - 2)}{self.c(Color.CYAN, style['v'])}")
+        
+        for i, opp in enumerate(self.curriculum_config.stages):
+            stage_num = f"Stage {i+1}"
+            if i == 0:
+                stage_text = f"  ▶ {self.c(Color.YELLOW, stage_num)}: {self.c(Color.BOLD, opp.name)} {self.c(Color.RED, '← CURRENT')}"
+            else:
+                stage_text = f"    {self.c(Color.CYAN, stage_num)}: {self.c(Color.BOLD, opp.name)}"
+            
+            # Truncate description if too long
+            desc = opp.description
+            max_desc_width = box_width - 8
+            if len(desc) > max_desc_width:
+                desc = desc[:max_desc_width - 3] + "..."
+            if i ==0:
+                print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD,stage_text)}{' ' * (box_width - len(stage_num) - len(opp.name) - 19)}{self.c(Color.CYAN, style['v'])}")
+
+            else:
+                print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD,stage_text)}{' ' * (box_width - len(stage_num) - len(opp.name) - 9)}{self.c(Color.CYAN, style['v'])}")
+            if desc:
+                print(f"{self.c(Color.CYAN, style['v'])}      {self.c(Color.BOLD, desc)}{' ' * (box_width - len(desc) - 8)}{self.c(Color.CYAN, style['v'])}")
+            
+            if i < len(self.curriculum_config.stages) - 1:
+                print(f"{self.c(Color.CYAN, style['v'])}      {self.c(Color.BOLD, '↓')}{' ' * (box_width - 9)}{self.c(Color.CYAN, style['v'])}")
+        
+        # Footer
+        print(f"{self.c(Color.CYAN, style['bl'] + style['h'] * (box_width - 2) + style['br'])}\n")
+        
+        # Summary stats
+        total_stages = len(self.curriculum_config.stages)
+        active_monitors = len(monitored)
+        print(f"{self.c(Color.DIM, f'✨ {total_stages} stages configured • {active_monitors} metrics monitored • Window size: {self.curriculum_config.window_size}')}\n")
+    
+    def log_replay_buffer(self, replay_buffer: Any) -> None:
+        """
+        Display replay buffer initialization information in a visually appealing format.
+        
+        Args:
+            replay_buffer: Replay buffer object with get_info() method that returns
+                        a dictionary of buffer names and their lengths
+        """
+        if not self.verbose:
+            return
+        
+        buffer_info = replay_buffer.get_info()
+        
+        # Calculate box width based on content
+        max_label_width = max(
+            (len(f"Replay buffer: {buffer}") for buffer in buffer_info.keys()),
+            default=30
+        )
+        max_length_width = max(
+            (len(f"Length: {length}") for length in buffer_info.values()),
+            default=20
+        )
+        content_width = max_label_width + max_length_width + 3
+        box_width = max(55, content_width + 4)
+        
+        # Choose box style
+        style = BoxStyle.ROUNDED
+        
+        # Header
+        print(f"\n{self.c(Color.CYAN, style['tl'] + style['h'] * (box_width - 2) + style['tr'])}")
+        
+        # Title section
+        title = "REPLAY BUFFER INITIALIZATION"
+        padding = (box_width - 2 - len(title)) // 2
+        print(f"{self.c(Color.CYAN, style['v'])}{' ' * padding}{self.c(Color.BOLD + Color.YELLOW, title)}{' ' * (box_width - 2 - padding - len(title))}{self.c(Color.CYAN, style['v'])}")
+        
+        print(f"{self.c(Color.CYAN, style['lc'] + style['h'] * (box_width - 2) + style['rc'])}")
+        
+        # Buffer info header
+        header_text = "Buffer Details:"
+        print(f"{self.c(Color.CYAN, style['v'])} {self.c(Color.BOLD + Color.BLUE, header_text)}{' ' * (box_width - len(header_text) - 3)}{self.c(Color.CYAN, style['v'])}")
+        print(f"{self.c(Color.CYAN, style['v'])}{' ' * (box_width - 2)}{self.c(Color.CYAN, style['v'])}")
+        
+        # Display each buffer
+        for i, (buffer_name, length) in enumerate(buffer_info.items()):
+            buffer_label = f"{buffer_name}:"
+            
+            # Format length with appropriate units
+            if length >= 1_000_000:
+                length_str = f"{length/1_000_000:.1f}M"
+            elif length >= 1_000:
+                length_str = f"{length/1_000:.1f}K"
+            else:
+                length_str = str(length)
+            
+            length_text = f"Size: {length_str}"
+            
+            # Format the line
+            line = f"  {self.c(Color.CYAN, buffer_label)} {self.c(Color.GREEN, length_text)}"
+            padding_len = box_width - len(buffer_label) - len(length_text) - 6
+            
+            print(f"{self.c(Color.CYAN, style['v'])} {line}{' ' * max(0, padding_len)}{self.c(Color.CYAN, style['v'])}")
+            
+            # Add separator between buffers (except after last)
+            if i < len(buffer_info) - 1:
+                print(f"{self.c(Color.CYAN, style['v'])}  {self.c(Color.DIM, '·' * (box_width - 6))}{' '* 2}{self.c(Color.CYAN, style['v'])}")
+        
+        # Footer
+        print(f"{self.c(Color.CYAN, style['bl'] + style['h'] * (box_width - 2) + style['br'])}")
+        
+        # Summary stats
+        total_buffers = len(buffer_info)
+        total_capacity = sum(buffer_info.values())
+        
+        if total_capacity >= 1_000_000:
+            total_str = f"{total_capacity/1_000_000:.1f}M"
+        elif total_capacity >= 1_000:
+            total_str = f"{total_capacity/1_000:.1f}K"
+        else:
+            total_str = str(total_capacity)
+        
+        summary = f"Total Buffers: {total_buffers} | Combined Size: {total_str}"
+        print(f"{self.c(Color.DIM, summary)}\n")
+
 
 def create_environment (
         config : TrainingConfig,
@@ -92,7 +301,7 @@ def train_with_curriculum(
     np.random.seed(config.seed)
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
-
+    logger = CurriculumTrainingLogger(curriculum_config, verbose= verbose)
 
     current_opponent = curriculum.current_opponent
     base_env , env = create_environment(
@@ -101,37 +310,12 @@ def train_with_curriculum(
     )
 
 
-    if verbose:
-        print("=" * 55)
-        print("CONVERGENCE-BASED CURRICULUM")
-        print("=" * 55)
-        print(f"Monitoring: ", end="")
-        parts = []
-        if curriculum_config.monitor_critic: parts.append("critic loss")
-        if curriculum_config.monitor_actor: parts.append("actor loss")
-        if curriculum_config.monitor_alpha: parts.append("alpha")
-        print(" + ".join(parts))
-        print(f"Threshold: {curriculum_config.change_threshold*100:.1f}% change")
-        print(f"Window: {curriculum_config.window_size} episodes")
-        print("-" * 55)
-        for i, opp in enumerate(curriculum_config.stages):
-            marker = " ← START" if i == 0 else ""
-            print(f"  Stage {i+1}: opponent name: {opp.name} opponent description: {opp.description}{marker}")
-        print("-" * 55)
-        print()
+    logger.print_training_header()
     
     # create replay buffer
     replay_buffer = create_replay_buffer (config= config , curriculum=curriculum_config.curriculum)
-    if verbose:
-        print("=" * 55)
-        print("REPLAY BUFFER INITIALIZATION")
-        print("=" * 55)
 
-        for buffer, len in replay_buffer.get_info().items():
-            print(f"Replay buffer: {buffer} | length : {len}")
-        print("-" * 55)
-        print()
-
+    logger.log_replay_buffer(replay_buffer)
         
 
     # Create SAC agent
