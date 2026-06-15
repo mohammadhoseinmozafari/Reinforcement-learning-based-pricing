@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import List, Tuple
 from train.uniform_training.logger import CurriculumTrainingLogger
 import numpy as np
 
@@ -82,6 +82,36 @@ def warmup (env ,
         state = next_state if not done else env.reset()[0]
 
 
+def run_episode(env, agent: SAC, metrics : TrainingMetrics , config: TrainingConfig) -> Tuple[float , List, List]:
+    """Run a single episode, return (episode_reward, critic_losses, actor_losses)."""
+    state, _ = env.reset()
+    metrics.reset_episode()
+
+    episode_reward = 0.0
+    episode_critic_loss: List = []
+    episode_actor_loss: List = []
+
+    for _ in range(config.episode_length):
+        action = agent.select_action(state)
+        next_state, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+
+        agent.replay_buffer.push(state, action, reward, next_state, done)
+
+        for _ in range(config.updates_per_step):
+            update_metrics = agent.update()
+            if update_metrics is not None:
+                episode_critic_loss.append(update_metrics['critic_loss'])
+                episode_actor_loss.append(update_metrics['actor_loss'])
+
+        metrics.record_step(info)
+        episode_reward += float(reward)
+        state = next_state
+
+        if done:
+            break
+
+    return episode_reward, episode_critic_loss, episode_actor_loss
 
 def train_with_curriculum(
         config: TrainingConfig,
@@ -141,48 +171,19 @@ def train_with_curriculum(
             base_env.close()
             
            
-            base_env = make_uniform_pricing_env(
-                opponent= opponent_type,
-                num_consumers = config.num_consumers,
-                episode_length = config.episode_length,
-                seed = config.seed
-                
+            base_env, env = create_environment(
+                config,
+                opponent_type
             )
-            env = FixedRewardNormalizer(base_env)
 
             agent.replay_buffer.set_stage(opponent_type)
-        state, _ = env.reset()
-        metrics.reset_episode()
         
-        episode_reward: float = 0.0
-        episode_critic_loss: List = []
-        episode_actor_loss: List = []
-        for step in range(episode_length):
-
-            action = agent.select_action(state)
-                        
-            # Environment step
-            next_state, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            # Store transition
-            agent.replay_buffer.push(state, action, reward, next_state, done)
-           
-           # Update agent
-            for _ in range(updates_per_step):
-                update_metrics = agent.update()
-                if update_metrics is not None:
-                    episode_critic_loss.append(update_metrics['critic_loss'])
-                    episode_actor_loss.append(update_metrics['actor_loss'])
-            
-            # Track metrics
-            metrics.record_step(info)
-    
-            episode_reward += float(reward)
-            state = next_state
-            
-            if done:
-                break
-
+        episode_reward, episode_critic_loss , episode_actor_loss = run_episode(
+            env,
+            agent,
+            metrics,
+            config
+        )
         # End episode
         metrics.end_episode(episode_reward)
         avg_critic = float(np.mean(episode_critic_loss) if episode_critic_loss else 0)
