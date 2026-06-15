@@ -5,7 +5,7 @@ by Haarnoja et al. (2018)
 """
 import gymnasium as gym
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -58,7 +58,7 @@ class Actor(nn.Module):
         nn.init.orthogonal_(self.log_std.weight, gain=0.01)
         nn.init.zeros_(self.log_std.bias)
     
-    def forward(self, state):
+    def forward(self, state) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass to get mean and log_std."""
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
@@ -103,7 +103,7 @@ class Actor(nn.Module):
         action = torch.tanh(z)
         
         return action
-    def get_policy_stats(self, state) -> dict[str, Any]:
+    def get_policy_stats(self, state) -> dict[str, torch.Tensor]:
         mean, log_std = self.forward(state)
         std = log_std.exp()
         raw_log_std = self.get_raw_log_std(state)
@@ -113,7 +113,7 @@ class Actor(nn.Module):
             'log_std':log_std,
             'std': std
         }
-    def get_raw_log_std(self, state):
+    def get_raw_log_std(self, state) -> torch.Tensor:
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         raw_log_std = self.log_std(x)
@@ -547,10 +547,10 @@ class SAC:
             stats = self.actor.get_policy_stats(state)
 
         return {
-            "mean": stats["mean"].cpu().numpy()[0],
-            "raw_log_std": stats["raw_log_std"].cpu().numpy()[0],
-            "log_std": stats["log_std"].cpu().numpy()[0],
-            "std": stats["std"].cpu().numpy()[0],
+            "mean": (stats["mean"].cpu().numpy()[0]),
+            "raw_log_std": (stats["raw_log_std"].cpu().numpy()[0]),
+            "log_std": (stats["log_std"].cpu().numpy()[0]),
+            "std": (stats["std"].cpu().numpy()[0]),
             
         }
 

@@ -1,5 +1,5 @@
 import re
-from typing import Any
+from typing import Any, List
 
 import numpy as np
 
@@ -277,6 +277,10 @@ class CurriculumTrainingLogger:
         print(box.bottom())
         print()
 
+    def log_start_training(self) -> None:
+        if not self.verbose :
+            return
+        print("\033[32mStarting training...\033[0m\n")
     # ------------------------------------------------------------
     def log_episode_progress(self, episode: int, metrics: Any, agent: Any,
                               eval_reward: float, curriculum: Any, config: Any) -> None:
@@ -414,4 +418,88 @@ class CurriculumTrainingLogger:
 
         print(box.top())
         print(box.row(status_line))
+        print(box.bottom())
+
+    def log_policy_stats(self, policy_stats) -> None:
+        if not self.verbose:
+            return
+        mean = policy_stats["mean"]
+        raw_log_std = policy_stats["raw_log_std"]
+        log_std = policy_stats["log_std"]
+        std = policy_stats["std"]
+        action = policy_stats["action"]
+        status_line = (
+            f"Policy Stats │ "
+            f"mean:{mean:>7.3f} │ "
+            f"raw_log_std:{raw_log_std:>7.3f} │ "
+            f"log_std:{log_std:>7.3f} │ "
+            f"std:{std:>7.3f} │ "
+            f"action:{action:>7.3f}"
+        )
+
+        box_width = max(visible_len(status_line) + 4, 80)
+        box = Box(box_width, color=Color.MAGENTA)
+
+        print(box.top())
+        print(box.row(self.c(Color.GREEN, status_line)))
+        print(box.bottom())
+
+    def log_stage_transition(self, new_opponent) -> None:
+        if not self.verbose:
+            return
+
+        message = f"Switching to opponent: {new_opponent.opponent_type}"
+        box_width = max(60, visible_len(message) + 6)
+        box = Box(box_width, color=Color.YELLOW)
+
+        print()
+        print(box.top())
+        print(box.row(self.c(Color.BOLD + Color.YELLOW, message), align="center"))
+        print(box.bottom())
+
+    def log_mixed_stage_entry(self, opponent_types: List[str]) -> None:
+        if not self.verbose:
+            return
+
+        message = "Entering Mixed Stage"
+        box_width = max(60, max(len(t) for t in opponent_types) + 20)
+        box = Box(box_width, color=Color.YELLOW)
+
+        print()
+        print(box.top())
+        print(box.row(self.c(Color.BOLD + Color.YELLOW, message), align="center"))
+        print(box.divider())
+        print(box.row(self.c(Color.BOLD + Color.BLUE, "Opponent Pool")))
+        print(box.blank())
+
+        for opp_type in opponent_types:
+            print(box.row(f"  {self.c(Color.CYAN, '•')} {self.c(Color.GREEN, opp_type)}"))
+
+        print(box.bottom())
+        print()
+    
+    def log_replay_buffer_stage_change(self, current_stage: str) -> None:
+        if not self.verbose:
+            return
+
+        message = f"Replay buffer stage changed → {current_stage}"
+        box_width = max(55, visible_len(message) + 6)
+        box = Box(box_width, color=Color.YELLOW)
+
+        print()
+        print(box.top())
+        print(box.row(self.c(Color.BOLD + Color.YELLOW, message), align="center"))
+        print(box.bottom())
+
+    def log_warmup_new_opponent(self, opponent_type: str) -> None:
+        if not self.verbose:
+            return
+
+        message = f"Warming up agent with new opponent: {opponent_type}"
+        box_width = max(55, visible_len(message) + 6)
+        box = Box(box_width, color=Color.YELLOW)
+
+        print()
+        print(box.top())
+        print(box.row(self.c(Color.BOLD + Color.YELLOW, message), align="center"))
         print(box.bottom())

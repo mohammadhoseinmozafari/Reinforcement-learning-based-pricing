@@ -18,7 +18,7 @@ Features:
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import  Tuple
+from typing import  Any, Dict, Tuple
 import json
 import os
 
@@ -30,6 +30,7 @@ import gymnasium as gym
 
 from train.config import TrainingConfig
 from train.metrics import TrainingMetrics
+from train.uniform_training.logger import CurriculumTrainingLogger
 
 
 # =============================================================================
@@ -213,7 +214,7 @@ def evaluate_agent(
     agent: SAC,
     num_episodes: int,
     max_steps: int
-) -> float:
+) -> Tuple[float , Dict[str, Any]]:
     """
     Evaluate agent with deterministic policy.
     
@@ -256,15 +257,16 @@ def evaluate_agent(
                 break
         
         total_reward += episode_reward
-    print(
-        f"[Policy Stats] | "
-        f"mean={np.mean(mean_values):.3f} | "
-        f"raw_log_std={np.mean(raw_log_std_values):.3f} | "
-        f"log_std={np.mean(log_std_values):.3f} | "
-        f"std={np.mean(std_values):.3f} | "
-        f"action={np.mean(actions_taken):.3f}"
-    )    
-    return total_reward / num_episodes
+    
+    policy_stats ={
+        "mean" : np.mean(mean_values),
+        "raw_log_std" : np.mean(raw_log_std_values),
+        "log_std" : np.mean(log_std_values),
+        "std" : np.mean(std_values),
+        "action" : np.mean(actions_taken)    
+        }
+        
+    return total_reward / num_episodes, policy_stats
 
 
 # =============================================================================
