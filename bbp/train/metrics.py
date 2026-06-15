@@ -61,7 +61,7 @@ class TrainingMetrics:
 
         self.step_opp_uniform_prices.append(info.get("opponent_price_uniform", 0.0))
         self.step_opp_new_prices.append(info.get("opponent_price_new", 0.0))
-        self.step_opp_new_prices.append(info.get("opponent_price_old", 0.0))
+        self.step_opp_old_prices.append(info.get("opponent_price_old", 0.0))
 
     def end_episode(self, total_reward: float):
         """Finalize episode metrics."""
