@@ -350,6 +350,8 @@ class UniformPricingEnv(gym.Env):
             "opponent_price_old": opp_prices_dict["price_old"],
             "opponent_profit": float(self.market.firms[1].last_period_profit),
             "opponent_demand": demand_1,
+            "opponent_regime" : self.market.firms[1].pricing_regime,
+            "regime" : self.market.firms[0].pricing_regime
         }
         
         # Add episode summary on termination

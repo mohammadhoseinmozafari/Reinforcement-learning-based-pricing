@@ -6,7 +6,7 @@ from env import make_uniform_pricing_env
 from models.SAC import SAC
 from models.buffer import BaseReplayBuffer, Curriculum, CurriculumReplayBuffer
 from train.config import TrainingConfig
-from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler, OpponentStage
+from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 from models.reward_normalizer import FixedRewardNormalizer
@@ -127,8 +127,7 @@ def train_with_curriculum(
     # =========================================
     # TRAINING LOOP
     # =========================================
-    if verbose:
-        print("\033[32mStarting training...\033[0m\n")
+    logger.log_start_training()
 
     num_episodes = config.num_episodes
     episode_length = config.episode_length
@@ -204,11 +203,11 @@ def train_with_curriculum(
         # EVALUATION
         # =========================================
         if (episode + 1) % config.eval_freq == 0:
-            eval_reward = evaluate_agent(base_env, agent, config.eval_episodes, config.episode_length)
+            eval_reward, policy_stats = evaluate_agent(base_env, agent, config.eval_episodes, config.episode_length)
             metrics.eval_rewards.append(eval_reward)
 
             logger.log_episode_progress(episode, metrics, agent, eval_reward, curriculum, config)
-    
+            logger.log_policy_stats(policy_stats)
             new_opponent = curriculum.advance()
             if new_opponent is not None:
                 print("\n" + "=" * 60)

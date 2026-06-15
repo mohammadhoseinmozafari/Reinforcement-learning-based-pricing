@@ -277,6 +277,10 @@ class CurriculumTrainingLogger:
         print(box.bottom())
         print()
 
+    def log_start_training(self) -> None:
+        if not self.verbose :
+            return
+        print("\033[32mStarting training...\033[0m\n")
     # ------------------------------------------------------------
     def log_episode_progress(self, episode: int, metrics: Any, agent: Any,
                               eval_reward: float, curriculum: Any, config: Any) -> None:
@@ -414,4 +418,28 @@ class CurriculumTrainingLogger:
 
         print(box.top())
         print(box.row(status_line))
+        print(box.bottom())
+
+    def log_policy_stats(self, policy_stats) -> None:
+        if not self.verbose:
+            return
+        mean = policy_stats["mean"]
+        raw_log_std = policy_stats["raw_log_std"]
+        log_std = policy_stats["log_std"]
+        std = policy_stats["std"]
+        action = policy_stats["action"]
+        status_line = (
+            f"Policy Stats │ "
+            f"mean:{mean:>7.3f} │ "
+            f"raw_log_std:{raw_log_std:>7.3f} │ "
+            f"log_std:{log_std:>7.3f} │ "
+            f"std:{std:>7.3f} │ "
+            f"action:{action:>7.3f}"
+        )
+
+        box_width = max(visible_len(status_line) + 4, 80)
+        box = Box(box_width, color=Color.MAGENTA)
+
+        print(box.top())
+        print(box.row(self.c(Color.GREEN, status_line)))
         print(box.bottom())
