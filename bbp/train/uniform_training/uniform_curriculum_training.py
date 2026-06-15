@@ -4,7 +4,7 @@ import numpy as np
 
 from env import make_uniform_pricing_env
 from models.SAC import SAC
-from models.buffer import CurriculumReplayBuffer
+from models.buffer import BaseReplayBuffer, CurriculumReplayBuffer
 from train.config import TrainingConfig
 from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler, OpponentStage
 from train.metrics import TrainingMetrics
@@ -25,12 +25,39 @@ def create_environment (
     env = FixedRewardNormalizer(base_env)
     return base_env, env
 
+def create_agent (
+        config: TrainingConfig, env, replay_buffer : BaseReplayBuffer   
+)  -> SAC:
+    
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+
+    agent = SAC(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        action_scale=1.0,  # Actions already in [0, 1]
+        hidden_dim=config.hidden_dim,
+        lr_actor=config.lr_actor,
+        lr_critic=config.lr_critic,
+        lr_alpha=config.lr_alpha,
+        gamma=config.gamma,
+        tau=config.tau,
+        alpha= config.alpha,
+        auto_alpha=config.auto_alpha,
+        replay_buffer= replay_buffer,
+        target_entropy=config.target_entropy,
+        log_std_min=config.log_std_min,
+        log_std_max=config.log_std_max
+    )
+
+    return agent
 
 def train_with_curriculum(
         config: TrainingConfig,
         curriculum_config: CurriculumConfig,
         verbose = True
 ):
+    
     np.random.seed(config.seed)
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
@@ -41,12 +68,7 @@ def train_with_curriculum(
         config,
         current_opponent
     )
-    
-    assert env.observation_space.shape
-    assert env.action_space.shape
 
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
 
     if verbose:
         print("=" * 55)
@@ -82,22 +104,10 @@ def train_with_curriculum(
         
 
     # Create SAC agent
-    agent = SAC(
-        state_dim=state_dim,
-        action_dim=action_dim,
-        action_scale=1.0,  # Actions already in [0, 1]
-        hidden_dim=config.hidden_dim,
-        lr_actor=config.lr_actor,
-        lr_critic=config.lr_critic,
-        lr_alpha=config.lr_alpha,
-        gamma=config.gamma,
-        tau=config.tau,
-        alpha= config.alpha,
-        auto_alpha=config.auto_alpha,
-        replay_buffer= replay_buffer,
-        target_entropy=config.target_entropy,
-        log_std_min=config.log_std_min,
-        log_std_max=config.log_std_max
+    agent = create_agent(
+        config= config,
+        env= env,
+        replay_buffer= replay_buffer
     )
     if verbose:
         print("=" * 55)
