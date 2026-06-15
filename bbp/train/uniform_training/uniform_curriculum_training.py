@@ -11,6 +11,9 @@ from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 from models.reward_normalizer import FixedRewardNormalizer
 
+
+
+
 def train_with_curriculum(
         config: TrainingConfig,
         curriculum_config: CurriculumConfig,
@@ -204,7 +207,17 @@ def train_with_curriculum(
                 avg_reward = np.mean(metrics.episode_rewards[-config.eval_freq:])
                 avg_price = np.mean(metrics.episode_prices[-config.eval_freq:])
                 
-                avg_opp_price = np.mean(metrics.episode_opp_prices[-config.eval_freq:])
+                avg_opp_price_uniform = np.mean(metrics.episode_opp_uniform_prices[-config.eval_freq:])
+                avg_opp_price_new = np.mean(metrics.episode_opp_new_prices[-config.eval_freq:])
+                avg_opp_price_old = np.mean(metrics.episode_opp_old_prices[-config.eval_freq:])
+                avg_opp_regime = np.mean(metrics.episode_opp_regimes[-config.eval_freq:])
+                
+                if avg_opp_regime == 1.0:
+                    opp_regime = "BBP"
+                elif avg_opp_regime == 0.0:
+                    opp_regime = "Uniform"
+                else:
+                    opp_regime = "Mixed"
 
                 avg_share = np.mean(metrics.episode_market_shares[-config.eval_freq:])
                 lrs = agent.get_current_lrs()
@@ -213,7 +226,10 @@ def train_with_curriculum(
                       f"Eval: {eval_reward:.1f} | "
                       f"Price: { avg_price :.2f} | "
                       f"Share: {avg_share:.2f} | "
-                      f"Opponent Price: {avg_opp_price:.2f} | "
+                      f"Opponent Regime : {opp_regime} | "
+                      f"Opponent Price (Uniform): {avg_opp_price_uniform:.2f} | "
+                      f"Opponent Price (BBP : New): {avg_opp_price_new:.2f} | "
+                      f"Opponent Price (BBP : Old): {avg_opp_price_old:.2f} | "
                       f"α: {agent.alpha:.4f} | " 
                       f"LR: {lrs['actor_lr']:.2e} | Stage: {info['stage_name']} | "
                       f"Convergance: Critic{critic_stat}, Actor{actor_stat}, alpha{alpha_stat} ")

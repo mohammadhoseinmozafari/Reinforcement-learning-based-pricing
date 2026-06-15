@@ -295,7 +295,9 @@ def save_checkpoint(
         "episode_opponent_profits": metrics.episode_opp_profits,
         
         "episode_prices": metrics.episode_prices,
-        "episode_opponent_prices": metrics.episode_opp_prices,
+        "episode_opponent_prices_uniform": metrics.episode_opp_uniform_prices,
+        "episode_opponent_prices_new": metrics.episode_opp_new_prices,
+        "episode_opponent_prices_old": metrics.episode_opp_old_prices,
         
         "episode_market_shares": metrics.episode_market_shares,
         "eval_rewards": metrics.eval_rewards,

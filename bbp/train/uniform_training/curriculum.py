@@ -91,6 +91,46 @@ class UniformPricingCurriculum(Curriculum):
         return sequence
   
 
-    
   
-    
+class BBPOpponentUniformPricingCurriculum(UniformPricingCurriculum):
+    def __init__(self) -> None:
+        super().__init__()
+        self.opponent_sequence =[
+
+            OpponentStage(
+                                name = "premium_bbp",
+                                opponent_type =  "premium_bbp",
+                                description =  "Fixed price_new= 3.0, price_old= 4.0, tutorial",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+
+                            OpponentStage(
+                                name = "premium_passive_bbp",
+                                opponent_type =  "premium_passive_bbp",
+                                description =  "Fixed price_new= 2.5, price_old= 3.5, tutorial",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+
+                            OpponentStage(
+                                name = "passive_bbp",
+                                opponent_type =  "passive_bbp",
+                                description =  "Fixed price_new= 2.0, price_old= 3.0, tutorial",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+                            
+                            OpponentStage(
+                                name = "passive_aggressive_bbp",
+                                opponent_type =  "passive_aggressive_bbp",
+                                description =  "Fixed price_new= 1.5, price_old= 2.5, tutorial",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+                            
+                            
+                            OpponentStage(
+                                name = "aggressive_bbp",
+                                opponent_type =  "aggressive_bbp",
+                                description =  "Fixed price_new= 1.0, price_old= 2.0, tutorial",
+                                difficulty =  OpponentDifficulty.TUTORIAL,
+                            ),
+
+        ]
