@@ -11,7 +11,19 @@ from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 from models.reward_normalizer import FixedRewardNormalizer
 
-
+def create_environment (
+        config : TrainingConfig,
+        opponent
+) :
+    base_env = make_uniform_pricing_env(
+        opponent= opponent,
+        num_consumers = config.num_consumers,
+        episode_length = config.episode_length,
+        seed = config.seed
+        
+    )
+    env = FixedRewardNormalizer(base_env)
+    return base_env, env
 
 
 def train_with_curriculum(
@@ -23,16 +35,13 @@ def train_with_curriculum(
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
 
-    
-    base_env = make_uniform_pricing_env(
-        opponent= curriculum.current_opponent,
-        num_consumers = config.num_consumers,
-        episode_length = config.episode_length,
-        seed = config.seed
-        
-    )
 
-    env = FixedRewardNormalizer(base_env)
+    current_opponent = curriculum.current_opponent
+    base_env , env = create_environment(
+        config,
+        current_opponent
+    )
+    
     assert env.observation_space.shape
     assert env.action_space.shape
 
