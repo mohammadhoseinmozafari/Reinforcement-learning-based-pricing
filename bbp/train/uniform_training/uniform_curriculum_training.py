@@ -57,11 +57,31 @@ def create_replay_buffer (
         config : TrainingConfig, 
         curriculum: Curriculum
 ) -> CurriculumReplayBuffer:
+    
     return CurriculumReplayBuffer(
         capacity= config.buffer_size,
         batch_size=config.batch_size,
         curriculum= curriculum
     )
+
+
+def warmup (env , 
+            replay_buffer : BaseReplayBuffer , 
+            steps : int , 
+            seed: int  )  -> None: 
+    
+    state, _ = env.reset(seed = seed)
+    
+    for _ in range (steps):
+
+        action = env.action_space.sample()
+        next_state, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        replay_buffer.push(state, action, reward, next_state, done)
+
+        state = next_state if not done else env.reset()[0]
+
+
 
 def train_with_curriculum(
         config: TrainingConfig,
@@ -136,14 +156,11 @@ def train_with_curriculum(
     # =========================================
     if verbose:
         print(f"\nWarming up with {config.warmup_steps} random steps...")
+
+
     
-    state, _ = env.reset(seed = config.seed)
-    for _ in range (config.warmup_steps):
-        action = env.action_space.sample()
-        next_state, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        agent.replay_buffer.push(state, action, reward, next_state, done)
-        state = next_state if not done else env.reset()[0]
+    warmup(env, agent.replay_buffer, config.warmup_steps, config.seed)
+
 
     # =========================================
     # TRAINING LOOP
@@ -298,13 +315,8 @@ def train_with_curriculum(
                     # agent.reset_target_networks()
                     if verbose:
                         print(f"Warming up the agent with new opponent {new_opponent.opponent_type}")
-                    state, _ = env.reset(seed = config.seed)
-                    for _ in range (config.warmup_steps):
-                        action = env.action_space.sample()
-                        next_state, reward, terminated, truncated, info = env.step(action)
-                        done = terminated or truncated
-                        agent.replay_buffer.push(state, action, reward, next_state, done)
-                        state = next_state if not done else env.reset()[0]
+
+                    warmup (env= env, replay_buffer= agent.replay_buffer, steps = config.warmup_steps, seed= config.seed)
                   
             
             if (episode + 1) % config.save_freq == 0:
