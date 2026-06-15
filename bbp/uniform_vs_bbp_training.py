@@ -10,7 +10,7 @@ from train.uniform_training.uniform_training import TrainingConfig, plot_trainin
 def main():
     # Create configuration
     config = TrainingConfig(
-        num_episodes= 1000,
+        num_episodes= 100,
         warmup_steps=500,
         eval_freq=10,
         save_freq=100,
