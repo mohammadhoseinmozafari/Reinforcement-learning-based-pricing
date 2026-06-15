@@ -4,7 +4,7 @@ import numpy as np
 
 from env import make_uniform_pricing_env
 from models.SAC import SAC
-from models.buffer import BaseReplayBuffer, CurriculumReplayBuffer
+from models.buffer import BaseReplayBuffer, Curriculum, CurriculumReplayBuffer
 from train.config import TrainingConfig
 from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler, OpponentStage
 from train.metrics import TrainingMetrics
@@ -52,6 +52,17 @@ def create_agent (
 
     return agent
 
+
+def create_replay_buffer (
+        config : TrainingConfig, 
+        curriculum: Curriculum
+) -> CurriculumReplayBuffer:
+    return CurriculumReplayBuffer(
+        capacity= config.buffer_size,
+        batch_size=config.batch_size,
+        curriculum= curriculum
+    )
+
 def train_with_curriculum(
         config: TrainingConfig,
         curriculum_config: CurriculumConfig,
@@ -90,7 +101,7 @@ def train_with_curriculum(
         print()
     
     # create replay buffer
-    replay_buffer = CurriculumReplayBuffer(capacity=config.buffer_size, batch_size=config.batch_size, curriculum=curriculum_config.curriculum)
+    replay_buffer = create_replay_buffer (config= config , curriculum=curriculum_config.curriculum)
     if verbose:
         print("=" * 55)
         print("REPLAY BUFFER INITIALIZATION")
