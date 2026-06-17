@@ -12,20 +12,6 @@ from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
 from models.reward_normalizer import FixedRewardNormalizer
 
-def create_environment (
-        config : TrainingConfig,
-        opponent
-) :
-    base_env = make_uniform_pricing_env(
-        opponent= opponent,
-        num_consumers = config.num_consumers,
-        episode_length = config.episode_length,
-        seed = config.seed
-        
-    )
-    env = FixedRewardNormalizer(base_env)
-    return base_env, env
-
 def create_agent (
         config: TrainingConfig, env, replay_buffer : BaseReplayBuffer   
 )  -> SAC:

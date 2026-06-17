@@ -134,3 +134,10 @@ class BBPOpponentUniformPricingCurriculum(UniformPricingCurriculum):
                             ),
 
         ]
+    
+    @property
+    def opponent_types(self) -> List[str]:
+        opp_types = []
+        for stage in self.opponent_sequence:
+            opp_types.append(stage.opponent_type)
+        return opp_types
