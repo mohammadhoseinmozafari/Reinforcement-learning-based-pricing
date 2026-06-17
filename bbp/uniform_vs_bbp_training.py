@@ -11,7 +11,7 @@ def main():
     # Create configuration
     config = TrainingConfig(
         num_episodes= 1000,
-        warmup_steps=500,
+        warmup_steps=5000,
         eval_freq=10,
         save_freq=100,
     )
@@ -20,8 +20,8 @@ def main():
     curr_config = CurriculumConfig(
     curriculum=curriculum,
     stages=curriculum.opponent_sequence,
-    window_size=20,
-    change_threshold=0.04,
+    window_size=50,
+    change_threshold=0.02,
     min_episodes_per_stage=100,
     max_episodes_per_stage=250
     

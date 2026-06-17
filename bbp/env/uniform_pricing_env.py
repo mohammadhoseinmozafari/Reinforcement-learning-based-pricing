@@ -114,7 +114,7 @@ class UniformPricingEnv(gym.Env):
         #   - opponent regime
 
 
-        obs_dim = 7
+        obs_dim = 9
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -189,10 +189,10 @@ class UniformPricingEnv(gym.Env):
         
         opponent_regime_norm = self._normalize_regime(opponent.pricing_regime)
         # Profit trend
-        # profit_trend = firm.get_profit_trend()
+        profit_trend = firm.get_profit_trend()
         
         # Popularity change
-        # pop_change = firm.get_popularity_change()
+        pop_change = firm.get_popularity_change()
         
         obs = np.array([
             market_share_norm,
@@ -201,7 +201,9 @@ class UniformPricingEnv(gym.Env):
             opp_price_new_norm,
             opp_price_old_norm,
             demand_ratio_norm,
-            opponent_regime_norm
+            opponent_regime_norm,
+            profit_trend,
+            pop_change
         ], dtype=np.float32)
         
         
@@ -324,7 +326,7 @@ class UniformPricingEnv(gym.Env):
         self._timestep += 1
         
         # Get reward (profit)
-        reward = float(self.market.firms[0].last_period_profit)
+        reward =  float(self.market.firms[0].last_period_profit) + 0.1 * float (self.market.firms[0].last_period_profit - self.market.firms[0].last_period_profit)
         
         # Track metrics
         self._episode_profits.append(reward)
