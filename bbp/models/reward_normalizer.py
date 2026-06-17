@@ -45,6 +45,40 @@ class FixedRewardNormalizer(gym.RewardWrapper):
             normalized = np.clip(normalized, -1.0, 1.0)
 
         return float(normalized)
+    
+class RealisticFixedRewardNormalizer(gym.RewardWrapper):
+    """
+    Fixed reward normalization for Hotelling pricing environment.
+
+    Normalizes against the realistic reward range in a duopoly,
+    not the theoretical maximum which is never achievable.
+
+    Normalized reward is approximately in [0, 1] where:
+        0 = worst realistic outcome (low share, low price)
+        1 = best realistic outcome (high share, high price)
+    """
+
+    def __init__(
+        self,
+        env: gym.Env,
+        baseline: float = 14.8,
+        scale: float = 123.51,
+        clip_reward: bool = False,
+    ):
+        super().__init__(env)
+
+        self.baseline = baseline
+        self.scale = scale
+
+        self.clip_reward = clip_reward
+
+    def reward(self, reward):
+        normalized = (float(reward) -self.baseline) / self.scale
+
+        if self.clip_reward:
+            normalized = np.clip(normalized, -1.0, 1.0)
+
+        return float(normalized)
 
 class EpisodeRewardNormalizer(gym.Wrapper):
     """

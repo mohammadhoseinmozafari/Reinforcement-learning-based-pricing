@@ -10,7 +10,7 @@ from train.config import TrainingConfig
 from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
-from models.reward_normalizer import FixedRewardNormalizer
+from models.reward_normalizer import FixedRewardNormalizer, RealisticFixedRewardNormalizer
 
 def create_environment (
         config : TrainingConfig,
@@ -23,7 +23,7 @@ def create_environment (
         seed = config.seed
         
     )
-    env = FixedRewardNormalizer(base_env)
+    env = RealisticFixedRewardNormalizer(base_env)
     return base_env, env
 
 def create_agent (
@@ -114,6 +114,25 @@ def run_episode(env, agent: SAC, metrics : TrainingMetrics , config: TrainingCon
 
     return episode_reward, episode_critic_loss, episode_actor_loss
 
+def estimate_reward_range(env, n_episodes=50):
+    rewards = []
+    for _ in range(n_episodes):
+        obs, _ = env.reset()
+        done = False
+        while not done:
+            action = env.action_space.sample()
+            obs, reward, term, trunc, info = env.step(action)
+            rewards.append(reward)  # raw reward, before normalization
+            done = term or trunc
+    
+    print(f"Raw reward stats:")
+    print(f"  mean={np.mean(rewards):.2f}")
+    print(f"  std={np.std(rewards):.2f}")
+    print(f"  min={np.min(rewards):.2f}")
+    print(f"  max={np.max(rewards):.2f}")
+    print(f"  p5={np.percentile(rewards, 5):.2f}")
+    print(f"  p95={np.percentile(rewards, 95):.2f}")
+
 def train_with_curriculum(
         config: TrainingConfig,
         curriculum_config: CurriculumConfig,
@@ -130,6 +149,7 @@ def train_with_curriculum(
         config,
         current_opponent
     )
+
 
 
     logger.print_training_header()
