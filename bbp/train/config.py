@@ -18,7 +18,7 @@ class TrainingConfig:
     hidden_dim: int = 32
     lr_actor: float = 5e-4
     lr_critic: float = 5e-4
-    lr_alpha: float = 2e-4
+    lr_alpha: float = 1e-4
     target_entropy : float = -0.5
     gamma: float = 0.9
     tau: float = 0.005
