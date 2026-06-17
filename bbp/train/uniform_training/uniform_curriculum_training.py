@@ -1,4 +1,5 @@
 from typing import List, Tuple
+from env.factory import EnvironmentFactory, EnvironmentType
 from train.uniform_training.logger import CurriculumTrainingLogger
 import numpy as np
 
@@ -125,13 +126,19 @@ def train_with_curriculum(
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
     logger = CurriculumTrainingLogger(curriculum_config, verbose= verbose)
+    env_factory = EnvironmentFactory(
+        EnvironmentType.UNIFORM_PRICING, 
+        reward_normalizer=FixedRewardNormalizer
+    )
 
 
 
     current_opponent = curriculum.current_opponent
-    base_env , env = create_environment(
-        config,
-        current_opponent
+    
+
+    base_env , env = env_factory.create_environment(
+        config = config,
+        opponent_type=current_opponent,
     )
 
 
@@ -174,9 +181,9 @@ def train_with_curriculum(
             base_env.close()
             
            
-            base_env, env = create_environment(
-                config,
-                opponent_type
+            base_env, env = env_factory.create_environment(
+                config= config,
+                opponent_type= opponent_type
             )
 
             agent.replay_buffer.set_stage(opponent_type)
@@ -223,9 +230,9 @@ def train_with_curriculum(
                 else:
                     opponent_type = new_opponent.opponent_type
 
-                    base_env , env = create_environment (
-                        config,
-                        opponent_type
+                    base_env , env = env_factory.create_environment (
+                        config= config,
+                        opponent_type= opponent_type
                     )
                     agent.replay_buffer.set_stage(
                         opponent_type
