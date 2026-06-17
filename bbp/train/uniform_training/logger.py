@@ -4,6 +4,7 @@ from typing import Any, List
 import numpy as np
 
 from train.curriculum import CurriculumConfig
+from train.metrics import TrainingMetrics
 
 
 # ----------------------------------------------------------------------
@@ -282,8 +283,8 @@ class CurriculumTrainingLogger:
             return
         print("\033[32mStarting training...\033[0m\n")
     # ------------------------------------------------------------
-    def log_episode_progress(self, episode: int, metrics: Any, agent: Any,
-                              eval_reward: float, curriculum: Any, config: Any) -> None:
+    def log_episode_progress(self, episode: int, metrics: TrainingMetrics, agent: Any,
+                              eval_reward: float, curriculum: Any, policy_stats : Any, config: Any) -> None:
         if not self.verbose:
             return
 
@@ -291,6 +292,7 @@ class CurriculumTrainingLogger:
         conv = info["convergence_status"]
 
         avg_reward = np.mean(metrics.episode_rewards[-config.eval_freq:])
+        avg_profit = np.mean (metrics.episode_profits[-config.eval_freq:])
         avg_price = np.mean(metrics.episode_prices[-config.eval_freq:])
         avg_opp_price_uniform = np.mean(metrics.episode_opp_uniform_prices[-config.eval_freq:])
         avg_opp_price_new = np.mean(metrics.episode_opp_new_prices[-config.eval_freq:])
@@ -314,6 +316,7 @@ class CurriculumTrainingLogger:
 
         # Performance metrics
         print(box.row(self.c(Color.BOLD + Color.BLUE, "Performance Metrics")))
+        print(box.row(f"Avg Profit:  {avg_profit}"))
         print(box.row_cols(
             f"Avg Reward:  {self.c(Color.GREEN, f'{avg_reward:>8.1f}')}",
             f"Eval Reward: {self.c(Color.GREEN, f'{eval_reward:>8.1f}')}",
@@ -356,6 +359,29 @@ class CurriculumTrainingLogger:
 
         print(box.divider())
 
+        #Policy Stats
+        print(box.row(self.c(Color.BOLD + Color.BLUE, "Policy Stats")))
+
+        print(box.row_cols(
+            
+            f"Mean: {self.c(Color.GREEN, f'{policy_stats["mean"]:.4f}')}",
+            f"Std:    {self.c(Color.GREEN, f'{policy_stats["std"]:.4f}')}",
+            
+            col_width,
+        ))
+
+        print(box.row_cols(
+            
+            f"Raw Log Std: {self.c(Color.GREEN, f'{policy_stats["raw_log_std"]:.4f}')}",
+            f"Log Std:    {self.c(Color.GREEN, f'{policy_stats["log_std"]:.4f}')}",
+            
+            col_width,
+        ))
+
+        print(box.row(f"Action: {self.c(Color.GREEN, f'{policy_stats["action"]:.4f}')}"))
+
+        print(box.divider())
+
         # Convergence status
         critic_ok, actor_ok, alpha_ok = conv.get("critic", False), conv.get("actor", False), conv.get("alpha", False)
 
@@ -371,7 +397,8 @@ class CurriculumTrainingLogger:
             f"Actor: {status(actor_ok)}   "
             f"Alpha: {status(alpha_ok)}"
         )
-        print(box.row(conv_line, align="center"))
+        print(box.row(conv_line, align="center"))      
+
 
         print(box.bottom())
         print()
@@ -418,30 +445,6 @@ class CurriculumTrainingLogger:
 
         print(box.top())
         print(box.row(status_line))
-        print(box.bottom())
-
-    def log_policy_stats(self, policy_stats) -> None:
-        if not self.verbose:
-            return
-        mean = policy_stats["mean"]
-        raw_log_std = policy_stats["raw_log_std"]
-        log_std = policy_stats["log_std"]
-        std = policy_stats["std"]
-        action = policy_stats["action"]
-        status_line = (
-            f"Policy Stats │ "
-            f"mean:{mean:>7.3f} │ "
-            f"raw_log_std:{raw_log_std:>7.3f} │ "
-            f"log_std:{log_std:>7.3f} │ "
-            f"std:{std:>7.3f} │ "
-            f"action:{action:>7.3f}"
-        )
-
-        box_width = max(visible_len(status_line) + 4, 80)
-        box = Box(box_width, color=Color.MAGENTA)
-
-        print(box.top())
-        print(box.row(self.c(Color.GREEN, status_line)))
         print(box.bottom())
 
     def log_stage_transition(self, new_opponent) -> None:

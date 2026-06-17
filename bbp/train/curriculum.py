@@ -85,6 +85,13 @@ class CurriculumConfig:
     # Logging
     verbose: bool = True
 
+    @property
+    def opponent_types (self) -> List[str] :
+        opponent_types = []
+        for opp_stage in self.stages:
+            opponent_types.append(opp_stage.opponent_type) 
+        return opponent_types
+
 class OpponentCurriculumScheduler:
     """
     Manages progression through opponent difficulty stages.

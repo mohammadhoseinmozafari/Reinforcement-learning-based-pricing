@@ -1,5 +1,4 @@
 from typing import List, Tuple
-from xxlimited import new
 from train.uniform_training.logger import CurriculumTrainingLogger
 import numpy as np
 
@@ -10,7 +9,7 @@ from train.config import TrainingConfig
 from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler
 from train.metrics import TrainingMetrics
 from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
-from models.reward_normalizer import FixedRewardNormalizer, RealisticFixedRewardNormalizer
+from models.reward_normalizer import FixedRewardNormalizer
 
 def create_environment (
         config : TrainingConfig,
@@ -23,7 +22,7 @@ def create_environment (
         seed = config.seed
         
     )
-    env = RealisticFixedRewardNormalizer(base_env)
+    env = FixedRewardNormalizer(base_env)
     return base_env, env
 
 def create_agent (
@@ -114,24 +113,7 @@ def run_episode(env, agent: SAC, metrics : TrainingMetrics , config: TrainingCon
 
     return episode_reward, episode_critic_loss, episode_actor_loss
 
-def estimate_reward_range(env, n_episodes=50):
-    rewards = []
-    for _ in range(n_episodes):
-        obs, _ = env.reset()
-        done = False
-        while not done:
-            action = env.action_space.sample()
-            obs, reward, term, trunc, info = env.step(action)
-            rewards.append(reward)  # raw reward, before normalization
-            done = term or trunc
-    
-    print(f"Raw reward stats:")
-    print(f"  mean={np.mean(rewards):.2f}")
-    print(f"  std={np.std(rewards):.2f}")
-    print(f"  min={np.min(rewards):.2f}")
-    print(f"  max={np.max(rewards):.2f}")
-    print(f"  p5={np.percentile(rewards, 5):.2f}")
-    print(f"  p95={np.percentile(rewards, 95):.2f}")
+
 
 def train_with_curriculum(
         config: TrainingConfig,
@@ -143,6 +125,8 @@ def train_with_curriculum(
 
     curriculum = OpponentCurriculumScheduler(curriculum_config)
     logger = CurriculumTrainingLogger(curriculum_config, verbose= verbose)
+
+
 
     current_opponent = curriculum.current_opponent
     base_env , env = create_environment(
@@ -181,8 +165,6 @@ def train_with_curriculum(
     logger.log_start_training()
 
     num_episodes = config.num_episodes
-    episode_length = config.episode_length
-    updates_per_step = config.updates_per_step
     for episode in range(num_episodes):
         current_stage = curriculum.current_stage
         
@@ -228,8 +210,7 @@ def train_with_curriculum(
             eval_reward, policy_stats = evaluate_agent(base_env, agent, config.eval_episodes, config.episode_length)
             metrics.eval_rewards.append(eval_reward)
 
-            logger.log_episode_progress(episode, metrics, agent, eval_reward, curriculum, config)
-            logger.log_policy_stats(policy_stats)
+            logger.log_episode_progress(episode, metrics, agent, eval_reward, curriculum, policy_stats , config)
 
             new_opponent = curriculum.advance()
             if new_opponent is not None:
