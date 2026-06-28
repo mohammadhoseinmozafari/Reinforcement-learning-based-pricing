@@ -1,5 +1,9 @@
 import streamlit as st
-
+st.markdown("""
+<style>
+    
+</style>
+""", unsafe_allow_html=True)
 def apply_styles():
     """Apply Apple-inspired design system to the app"""
     st.markdown("""
@@ -215,6 +219,9 @@ def apply_styles():
             color: #1D1D1F;
             border-bottom: 2px solid #5D9BEC;
         }
+        [data-testid="stSidebarNav"] {
+        display: none;
+    }
     </style>
     """, unsafe_allow_html=True)
 

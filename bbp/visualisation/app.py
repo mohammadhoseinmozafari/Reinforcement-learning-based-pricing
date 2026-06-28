@@ -4,6 +4,8 @@ st.set_page_config(
     page_title="A Reinforcement Learning approach to pricing strategies",
     page_icon="🤖",
     layout="wide",
+    initial_sidebar_state="collapsed",  # Collapse sidebar by default
+
 )
 
 from utils.styles import apply_styles
