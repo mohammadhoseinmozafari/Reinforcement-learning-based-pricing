@@ -1,4 +1,20 @@
 import streamlit as st
+colors = {
+    'soft_blue'     :   "#A8CEEF",
+    'harsh_blue'    :   "#44A1F3", 
+    'soft_green'    :   "#7DF67D",   
+    'soft_orange'   :   "#F9A686",   
+    'soft_pink'     :   "#F5C5D5",
+    'harsh_pink'    :   "#F58AAD",   
+    'soft_purple'   :   '#D5C5F0',   
+    'harsh_purple'  :   "#BD6DFB",
+    'soft_teal'     :   "#BDEEE2",   
+    'harsh_teal'    :   "#0BD4A2",   
+    'soft_gray'     :   "#C9C9E1", 
+    'harsh_gray'    :   "#212125",   
+    'soft_yellow'   :   '#FFF5C0',
+    'soft_red'      :   "#F68C9D",
+}
 st.markdown("""
 <style>
     

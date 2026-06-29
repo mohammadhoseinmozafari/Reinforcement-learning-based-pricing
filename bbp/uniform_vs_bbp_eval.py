@@ -22,7 +22,7 @@ env_factory = EnvironmentFactory(
     config.env_type
 )
 
-evaluator = Evaluator(config)
+
 agent = SAC(
     state_dim=9, 
     action_dim=1,
@@ -34,8 +34,9 @@ agent.load(config.model_path)
 
 for opp_type in opponent_types :
     _, env = env_factory.create_environment(opp_type, config)
-
-    eval_result = evaluator.evaluate(agent, env).to_dict()
+    evaluator = Evaluator(config)
+    eval_result = evaluator.evaluate(agent, env)
+    
 
     result_save_path = os.path.join(SAVE_PATH, f"eval_result_{opp_type}.json")
     with open(result_save_path, 'w') as f:

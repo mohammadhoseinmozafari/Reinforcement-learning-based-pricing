@@ -13,7 +13,7 @@ class EvaluationConfig:
     env_type : EnvironmentType
     model_path : str 
 
-    num_episodes : int = 10
+    num_episodes : int = 1
     episode_length = EPISODE_LENGTH
     num_consumers = NUM_CONSUMERS
 

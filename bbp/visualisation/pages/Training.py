@@ -1,37 +1,12 @@
 import plotly.graph_objects as go
 import streamlit as st
-import json
 import numpy as np
 import pandas as pd
-from utils import load_data, PathResolver
+from utils import load_data, PathResolver,moving_average, apply_styles, colors
 
-from utils.styles import apply_styles
 
 apply_styles()
-  
-colors = {
-    'soft_blue'     :   "#A8CEEF",
-    'harsh_blue'    :   "#44A1F3", 
-    'soft_green'    :   "#7DF67D",   
-    'soft_orange'   :   "#F9A686",   
-    'soft_pink'     :   "#F5C5D5",
-    'harsh_pink'    :   "#F58AAD",   
-    'soft_purple'   :   '#D5C5F0',   
-    'harsh_purple'  :   "#BD6DFB",
-    'soft_teal'     :   "#BDEEE2",   
-    'harsh_teal'    :   "#0BD4A2",   
-    'soft_gray'     :   "#C9C9E1", 
-    'harsh_gray'    :   "#212125",   
-    'soft_yellow'   :   '#FFF5C0',
-    'soft_red'      :   "#F68C9D",
-}
-
-# Helper functions
-def moving_average(data, window=10):
-    if len(data) < window:
-        return data
-    return np.convolve(data, np.ones(window)/window, mode='valid')
-
+window = 10
 
 # ------------------------------------------------------------
 # Data loading (unchanged logic)
@@ -90,6 +65,47 @@ final_avg_reward = np.mean(data['episode_rewards'][-50:]) if len(data['episode_r
 final_market_share = data['episode_market_shares'][-1]
 best_reward = max(data['episode_rewards'])
 total_episodes = len(data['episode_rewards'])
+# ------------------------------------------------------------
+# Sidebar controls
+# ------------------------------------------------------------
+st.sidebar.markdown("### 🎛️ Visualization Controls")
+smoothing = st.sidebar.slider("Smoothing window", 1, 30, 10)
+window = smoothing
+if st.sidebar.checkbox("Show raw data", value=False):
+    st.markdown('<div class="apple-divider"></div>', unsafe_allow_html=True)
+    st.markdown("### 📋 Raw Training Data")
+    data_option = st.selectbox(
+        "Select data to view",
+        ["Episode Metrics", "Losses", "Alphas", "Evaluation Rewards"]
+    )
+    if data_option == "Episode Metrics":
+        st.dataframe(df_metrics, use_container_width=True)
+    elif data_option == "Losses":
+        st.dataframe(pd.DataFrame({
+            'Step': range(len(data['critic_losses'])),
+            'Critic Loss': data['critic_losses'],
+            'Actor Loss': data['actor_losses']
+        }), use_container_width=True)
+    elif data_option == "Alphas":
+        st.dataframe(pd.DataFrame({
+            'Step': range(len(data['alphas'])),
+            'Alpha': data['alphas']
+        }), use_container_width=True)
+    else:
+        st.dataframe(pd.DataFrame({
+            'Episode': range(len(data['eval_rewards'])),
+            'Reward': data['eval_rewards']
+        }), use_container_width=True)
+
+st.sidebar.markdown("### 💾 Export Data")
+if st.sidebar.button("Export metrics as CSV"):
+    csv = df_metrics.to_csv(index=False)
+    st.sidebar.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name="rl_training_metrics.csv",
+        mime="text/csv"
+    )
 
 # ------------------------------------------------------------
 # Header
@@ -166,7 +182,7 @@ with tab1:
     col1, col2 = st.columns(2)
 
     with col1:
-        ma_rewards = moving_average(data['episode_rewards'])
+        ma_rewards = moving_average(data['episode_rewards'], window= window)
         fig = go.Figure()
         fig.add_trace(
             go.Scatter(
@@ -202,7 +218,7 @@ with tab1:
             go.Scatter(
                 x=df_metrics['episode'],
                 y= np.concatenate([np.repeat(np.nan, 9), ma_rewards]),
-                name = "Moving Avg (10 ep)",
+                name = f"Moving Avg ({window})",
                 mode= 'lines',
                 line=dict(
                     color=colors['soft_red'],
@@ -393,7 +409,7 @@ with tab1:
                 y=data['episode_opponent_prices'],
                 name='Opponent Price',
                 mode='lines',
-                line=dict(color=colors['harsh_pink'], width=1.5),
+                line=dict(color=colors['harsh_pink'], width=2.5),
             
 
             ))
@@ -712,47 +728,6 @@ with tab4:
     with col3:
         st.metric("Eval Episodes", len(data['eval_rewards']))
 
-# ------------------------------------------------------------
-# Sidebar controls
-# ------------------------------------------------------------
-st.sidebar.markdown("### 🎛️ Visualization Controls")
-smoothing = st.sidebar.slider("Smoothing window", 1, 30, 10)
-
-if st.sidebar.checkbox("Show raw data", value=False):
-    st.markdown('<div class="apple-divider"></div>', unsafe_allow_html=True)
-    st.markdown("### 📋 Raw Training Data")
-    data_option = st.selectbox(
-        "Select data to view",
-        ["Episode Metrics", "Losses", "Alphas", "Evaluation Rewards"]
-    )
-    if data_option == "Episode Metrics":
-        st.dataframe(df_metrics, use_container_width=True)
-    elif data_option == "Losses":
-        st.dataframe(pd.DataFrame({
-            'Step': range(len(data['critic_losses'])),
-            'Critic Loss': data['critic_losses'],
-            'Actor Loss': data['actor_losses']
-        }), use_container_width=True)
-    elif data_option == "Alphas":
-        st.dataframe(pd.DataFrame({
-            'Step': range(len(data['alphas'])),
-            'Alpha': data['alphas']
-        }), use_container_width=True)
-    else:
-        st.dataframe(pd.DataFrame({
-            'Episode': range(len(data['eval_rewards'])),
-            'Reward': data['eval_rewards']
-        }), use_container_width=True)
-
-st.sidebar.markdown("### 💾 Export Data")
-if st.sidebar.button("Export metrics as CSV"):
-    csv = df_metrics.to_csv(index=False)
-    st.sidebar.download_button(
-        label="Download CSV",
-        data=csv,
-        file_name="rl_training_metrics.csv",
-        mime="text/csv"
-    )
 
 # ------------------------------------------------------------
 # Footer – subtle, anchored

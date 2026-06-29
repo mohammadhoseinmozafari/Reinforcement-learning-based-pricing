@@ -1,22 +1,27 @@
-from dataclasses import dataclass
-from typing import Dict
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List
 
 
 @dataclass
 class EvaluationResult :
-    avg_reward : float
+    episode_rewards : List[float]
     std_reward: float
-    avg_profit : float
+    episode_profits: List[float]
     total_profit : float
-    avg_price: float
-    avg_market_share : float
+    episode_opp_profits : List[float]
+    total_opp_profit : float
+    episode_opp_uniform_prices : List[float]
+    episode_opp_new_prices  : List[float]
+    episode_opp_old_prices  :   List[float]
+    episode_prices: List[float]
+    episode_market_shares : List[float]
 
-    def to_dict(self) -> Dict[str, float] :
-        return {
-            "avg_reward" : self.avg_reward,
-            "std_reward" : self.std_reward,
-            "avg_profit" : self.avg_profit,
-            "total_profit" : self.total_profit,
-            "avg_price" : self.avg_price,
-            "avg_market_share" : self.avg_market_share
-        }
+    def to_dict(self) -> Dict[str, Any] :
+        return asdict(self)
+
+       
+       
+       
+       
+       
+       

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 from evaluation.config import EvaluationConfig
 from evaluation.metrics import EvaluationMetrics
 from evaluation.results import EvaluationResult
@@ -15,7 +15,7 @@ class Evaluator :
         self.evaluation_metrics = EvaluationMetrics()
 
 
-    def evaluate(self, agent: Any, env) -> EvaluationResult:
+    def evaluate(self, agent: Any, env) -> Dict:
         """
         Run the agent deterministically for several episodes.
         Returns average stats.
@@ -44,4 +44,4 @@ class Evaluator :
             self.evaluation_metrics.end_episode(episode_reward)
 
 
-        return self.evaluation_metrics.to_results()
+        return self.evaluation_metrics.collect_steps()
