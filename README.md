@@ -32,10 +32,7 @@ Use Python 3.10 or newer. The code depends on the core scientific and RL stack u
 - `gymnasium`
 - `pettingzoo`
 - `stable-baselines3`
-- `sb3-contrib`
-- `tensorboard`
-
-If you are running the training or evaluation pipelines, make sure your virtual environment is activated before launching any script.
+Note that StableBaselines is for multi-agent environments, which this project doesn't have a module for training multi agent environments yet, So this project will work without stable baseline for now. If you are running the training or evaluation pipelines, make sure your virtual environment is activated before launching any script.
 
 ## Installation
 
@@ -44,7 +41,7 @@ cd "/home/mamasi/Desktop/article/Dynamic Pricing/bbp"
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install numpy pandas plotly streamlit gymnasium pettingzoo stable-baselines3 sb3-contrib tensorboard
+pip install -r requirements.txt 
 ```
 
 If you already have a working environment, install only the missing packages.
