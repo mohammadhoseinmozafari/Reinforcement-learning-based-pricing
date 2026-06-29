@@ -1,3 +1,14 @@
-bbp/venv/lib/python3.13/site-packages/cuda/bindings/cynvvm.cpython-313-x86_64-linux-gnu.so
-plots/
-reports/
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.db
+data/
+.vscode/
+.idea/
+dist/
+build/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+venv/

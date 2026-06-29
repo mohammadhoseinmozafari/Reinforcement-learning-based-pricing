@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<indexing>
+ <object alt="" name="Object3" object_type="ole"/>
+ <object alt="" name="Object5" object_type="ole"/>
+ <object alt="" name="Object4" object_type="ole"/>
+ <object alt="" name="Object6" object_type="ole"/>
+ <object alt="" name="Object13" object_type="ole"/>
+ <object alt="" name="Object7" object_type="ole"/>
+ <object alt="" name="Object8" object_type="ole"/>
+ <object alt="" name="Image1" object_type="graphic"/>
+ <object alt="" name="Image2" object_type="graphic"/>
+ <object alt="" name="Image3" object_type="graphic"/>
+ <object alt="" name="Image4" object_type="graphic"/>
+ <object alt="" name="Image5" object_type="graphic"/>
+ <object alt="" name="Image6" object_type="graphic"/>
+ <object alt="" name="Image7" object_type="graphic"/>
+ <object alt="" name="Image8" object_type="graphic"/>
+ <object alt="" name="Image9" object_type="graphic"/>
+ <object alt="" name="Image10" object_type="graphic"/>
+ <paragraph index="60" node_type="writer">Market Simulation</paragraph>
+ <paragraph index="61" node_type="writer">The total utility consumers get from purchasing product A at price 𝑝_a  in period 𝑚 is denoted as</paragraph>
+ <paragraph index="63" node_type="writer">  </paragraph>
+ <paragraph index="66" node_type="writer">The total utility consumers obtain over n periods is expressed as</paragraph>
+ <paragraph index="67" node_type="writer"> </paragraph>
+ <paragraph index="71" node_type="writer">Environment Parameters</paragraph>
+ <paragraph index="72" node_type="writer">To be able to simulate an environment and to train our RL agent, we need to first set values to our constant parameters and initialize our simulated environment using those values. These parameters should not change across different training phases and experiments.</paragraph>
+ <paragraph index="74" node_type="writer">Number of consumers: NUM_CONSUMERS = 50</paragraph>
+ <paragraph index="75" node_type="writer">Number of periods: EPISODE_LENGTH = 100</paragraph>
+ <paragraph index="77" node_type="writer">Hotelling line parameters</paragraph>
+ <paragraph index="78" node_type="writer">HOTELLING_LEFT = 0.0</paragraph>
+ <paragraph index="79" node_type="writer">HOTELLING_RIGHT = 1.0</paragraph>
+ <paragraph index="80" node_type="writer">FIRM_A_LOCATION = 0.0</paragraph>
+ <paragraph index="81" node_type="writer">FIRM_B_LOCATION = 1.0</paragraph>
+ <paragraph index="83" node_type="writer">Economic parameters</paragraph>
+ <paragraph index="84" node_type="writer">t : TRANSPORTATION_COST = 1.0</paragraph>
+ <paragraph index="85" node_type="writer">V: BASE_VALUE = 10.0</paragraph>
+ <paragraph index="87" node_type="writer">Consumer location</paragraph>
+ <paragraph index="88" node_type="writer">consumers location are randomly sampled from a uniform distribution</paragraph>
+ <paragraph index="90" node_type="writer">Consumer Behaviour </paragraph>
+ <paragraph index="92" node_type="writer">Exclusivity seeking : each consumer have different exclusivity preference. Consequently , for simulating as close to real world scenarios as possible, exclusivity preferences of consumers are sampled from uniform distribution with min of 0 and max of 1 :</paragraph>
+ <paragraph index="94" node_type="writer"> </paragraph>
+ <paragraph index="96" node_type="writer">Strategicness : same as exclusivity preference, this parameter is also sampled from a uniform distribution with min of 0 and max of 1:</paragraph>
+ <paragraph index="99" node_type="writer">Consumer foresight horizon : This parameter is horizon for expected utility calculation. </paragraph>
+ <paragraph index="100" node_type="writer">H : CONSUMER_FORESIGHT_HORIZON = 3</paragraph>
+ <paragraph index="101" node_type="writer">this means that consumers look H periods ahead to calculate their utility.</paragraph>
+ <paragraph index="108" node_type="writer">Experiments </paragraph>
+ <paragraph index="110" node_type="writer">Uniform Pricing</paragraph>
+ <paragraph index="112" node_type="writer">In the first step, our RL agent learns to post optimized uniform prices against an opponent firm which follows a constant pricing policy.</paragraph>
+ <paragraph index="114" node_type="writer">Constant pricing policy : Opponents with this type of policy post same price each period. For example Aggressive Constant Opponent, posts price 1.5 every period and it’s price never changes.</paragraph>
+ <paragraph index="116" node_type="writer">Training</paragraph>
+ <paragraph index="117" node_type="writer">We trained the RL agent against five different opponents. Agent learns through a simple curriculum. </paragraph>
+ <paragraph index="119" node_type="writer">Curriculum: Curriculums have different stages. In each stage an opponent is set against the agent. Agent then starts to find a policy which maximizes its profit. Curriculum opponents get harder in each stage, making the agent to learn progressively. </paragraph>
+ <paragraph index="121" node_type="writer">Curriculum Steps:</paragraph>
+ <paragraph index="122" node_type="writer">1. An initial stage is set. Stage reveals an opponent against the agent.</paragraph>
+ <paragraph index="123" node_type="writer">2. Agent learns how the opponent behaves within periods.</paragraph>
+ <paragraph index="124" node_type="writer">3. Agent learns the policy to maximize its profit against the opponent.</paragraph>
+ <paragraph index="125" node_type="writer">4. Curriculum scheduler monitors the agent during the training phase.</paragraph>
+ <paragraph index="126" node_type="writer">5. If the agent learns the optimal policy, curriculum scheduler changes the stage.</paragraph>
+ <paragraph index="127" node_type="writer">6. New stage reveals a new different opponent to the agent.</paragraph>
+ <paragraph index="128" node_type="writer">7. Repeat 2 → 6 until the agent learns all the stages.</paragraph>
+ <paragraph index="130" node_type="writer">For example : </paragraph>
+ <paragraph index="131" node_type="writer">Agent in first episodes learns to optimize it’s profit against an opponent which posts price 3.5 (Premium Opponent),  curriculum scheduler sees that the errors are below a specific threshold, then it decides that the agent has learned the optimal policy for that opponent, then advances to the next opponent. Next opponent will post price 3.0, the same happens and agent learns how to post optimal price against the Premium Passive Opponent, this continues until the agent learns how to optimize its profit against all the opponents.</paragraph>
+ <paragraph index="133" node_type="writer">Curriculum stages </paragraph>
+ <paragraph index="135" node_type="writer">Stage 1</paragraph>
+ <paragraph index="136" node_type="writer">	Opponent 1 : Aggressive Opponent</paragraph>
+ <paragraph index="137" node_type="writer">		posts Constant Uniform Price = 1.5 every period</paragraph>
+ <paragraph index="139" node_type="writer">Stage 2</paragraph>
+ <paragraph index="140" node_type="writer">	Opponent 2: Passive Aggressive Opponent</paragraph>
+ <paragraph index="141" node_type="writer">		posts Constant Uniform Price = 2.0 every period </paragraph>
+ <paragraph index="143" node_type="writer">Stage 3</paragraph>
+ <paragraph index="144" node_type="writer">	Opponent 3: Passive Opponent</paragraph>
+ <paragraph index="145" node_type="writer">		posts Constant Uniform Price = 2.5 every period</paragraph>
+ <paragraph index="147" node_type="writer">Stage 4</paragraph>
+ <paragraph index="148" node_type="writer">	Opponent 4 : Premium Passive Opponent</paragraph>
+ <paragraph index="149" node_type="writer">		posts Constant Uniform Price = 3.0 every period</paragraph>
+ <paragraph index="151" node_type="writer">Stage 5</paragraph>
+ <paragraph index="152" node_type="writer">	Opponent 5: Premium Opponent</paragraph>
+ <paragraph index="153" node_type="writer">		posts Constant Uniform Price = 3.5 every period</paragraph>
+ <paragraph index="154" node_type="writer">	</paragraph>
+ <paragraph index="158" node_type="writer">Theoritical Optimization</paragraph>
+ <paragraph index="159" node_type="writer">We needed baselines to compare our agent’s behaviour against it. For this manner, Grid Search Optimization were used to find the optimal profits against different opponents.</paragraph>
+ <paragraph index="161" node_type="writer">Opponent 1: Aggressive Opponent | Fixed Price = 1.5</paragraph>
+ <paragraph index="166" node_type="writer">Opponent 2: Passive Aggressive Opponent | Fixed Price = 2.0</paragraph>
+ <paragraph index="169" node_type="writer">Opponent 3: Passive Opponent | Fixed Price = 2.5</paragraph>
+ <paragraph index="171" node_type="writer">Opponent 4: Premium Passive Opponent | Fixed Price = 3</paragraph>
+ <paragraph index="173" node_type="writer">Opponent 5: Premium Opponent | Fixed Price = 3.5</paragraph>
+ <paragraph index="175" node_type="writer">Agent Training Metrics</paragraph>
+ <paragraph index="185" node_type="writer">Final Results</paragraph>
+ <object index="187" name="Table1" object_type="table"/>
+ <paragraph index="189" node_type="writer" parent_index="187">Opponent Type</paragraph>
+ <paragraph index="192" node_type="writer" parent_index="187">Opponent Price</paragraph>
+ <paragraph index="195" node_type="writer" parent_index="187">Optimal Price</paragraph>
+ <paragraph index="198" node_type="writer" parent_index="187">Agent Price (avg)</paragraph>
+ <paragraph index="201" node_type="writer" parent_index="187">Optimal Profit</paragraph>
+ <paragraph index="204" node_type="writer" parent_index="187">Agent Profit</paragraph>
+ <paragraph index="205" node_type="writer" parent_index="187">(avg)</paragraph>
+ <paragraph index="208" node_type="writer" parent_index="187">Profit</paragraph>
+ <paragraph index="209" node_type="writer" parent_index="187">Difference</paragraph>
+ <paragraph index="212" node_type="writer" parent_index="187"> Aggressive Uniform</paragraph>
+ <paragraph index="215" node_type="writer" parent_index="187"> 1.5</paragraph>
+ <paragraph index="218" node_type="writer" parent_index="187">1.6</paragraph>
+ <paragraph index="221" node_type="writer" parent_index="187">1.77</paragraph>
+ <paragraph index="224" node_type="writer" parent_index="187">4480</paragraph>
+ <paragraph index="227" node_type="writer" parent_index="187">4343.28</paragraph>
+ <paragraph index="230" node_type="writer" parent_index="187">-3.05%</paragraph>
+ <paragraph index="233" node_type="writer" parent_index="187">Passive Aggressive Uniform</paragraph>
+ <paragraph index="236" node_type="writer" parent_index="187">2.0</paragraph>
+ <paragraph index="239" node_type="writer" parent_index="187">1.7</paragraph>
+ <paragraph index="242" node_type="writer" parent_index="187">2.19</paragraph>
+ <paragraph index="245" node_type="writer" parent_index="187">6118</paragraph>
+ <paragraph index="248" node_type="writer" parent_index="187"> 5653.94</paragraph>
+ <paragraph index="251" node_type="writer" parent_index="187">-7.59%</paragraph>
+ <paragraph index="254" node_type="writer" parent_index="187">Passive Uniform</paragraph>
+ <paragraph index="257" node_type="writer" parent_index="187">2.5</paragraph>
+ <paragraph index="260" node_type="writer" parent_index="187">2.2</paragraph>
+ <paragraph index="263" node_type="writer" parent_index="187">2.41</paragraph>
+ <paragraph index="266" node_type="writer" parent_index="187">7917.8</paragraph>
+ <paragraph index="269" node_type="writer" parent_index="187">7400.53</paragraph>
+ <paragraph index="272" node_type="writer" parent_index="187">-6.53%</paragraph>
+ <paragraph index="275" node_type="writer" parent_index="187">Premium Passive Uniform</paragraph>
+ <paragraph index="278" node_type="writer" parent_index="187">3.0</paragraph>
+ <paragraph index="281" node_type="writer" parent_index="187">2.5</paragraph>
+ <paragraph index="284" node_type="writer" parent_index="187">2.77</paragraph>
+ <paragraph index="287" node_type="writer" parent_index="187">9752.5</paragraph>
+ <paragraph index="290" node_type="writer" parent_index="187"> 9395.38</paragraph>
+ <paragraph index="293" node_type="writer" parent_index="187">-3.66%</paragraph>
+ <paragraph index="296" node_type="writer" parent_index="187">Premium Uniform</paragraph>
+ <paragraph index="299" node_type="writer" parent_index="187">3.5</paragraph>
+ <paragraph index="302" node_type="writer" parent_index="187">3.0</paragraph>
+ <paragraph index="305" node_type="writer" parent_index="187">3.01</paragraph>
+ <paragraph index="308" node_type="writer" parent_index="187">11703</paragraph>
+ <paragraph index="311" node_type="writer" parent_index="187">11604.16</paragraph>
+ <paragraph index="314" node_type="writer" parent_index="187">-0.84%</paragraph>
+</indexing>
