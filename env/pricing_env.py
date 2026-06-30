@@ -128,8 +128,8 @@ class PricingEnv(gym.Env):
 
         obs_dim = 13
         self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
+            low=-1.0,
+            high=1.0,
             shape=(obs_dim,),
             dtype=np.float32
         )
@@ -478,7 +478,7 @@ def make_pricing_env(
     
     print(f'Training is initialized with opponent police: {opponent_policy}')
     return PricingEnv(
-        agent_config
+        agent_config,
         opponent_policy=opponent_policy,
         **env_kwargs
     )
