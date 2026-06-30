@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from config.constants import NUM_CONSUMERS, EPISODE_LENGTH
 from typing import Optional, Dict, List
+from env import EnvironmentType
 from train.curriculum import Curriculum, OpponentStage
 # =============================================================================
 # TRAINING CONFIGURATION
@@ -10,6 +11,7 @@ from train.curriculum import Curriculum, OpponentStage
 class TrainingConfig:
     """Configuration for Uniform Pricing training."""
     # Environment
+    environment_type  = EnvironmentType.UNIFORM_PRICING
     num_consumers: int = NUM_CONSUMERS
     episode_length: int = EPISODE_LENGTH
     opponent_type: str = "random_reactive_uniform"
@@ -46,7 +48,7 @@ class TrainingConfig:
     
     # Reproducibility
     seed: int = 42
-    
+    verbose : bool = True
     # Paths
     save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"
 

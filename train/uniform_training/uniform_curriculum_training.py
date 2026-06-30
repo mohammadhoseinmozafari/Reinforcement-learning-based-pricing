@@ -4,7 +4,7 @@ from train.uniform_training.logger import CurriculumTrainingLogger
 import numpy as np
 
 from env import make_uniform_pricing_env
-from models.SAC import SAC
+from models.sac import SAC
 from models.buffer import BaseReplayBuffer, Curriculum, CurriculumReplayBuffer
 from train.config import TrainingConfig
 from train.curriculum import CurriculumConfig, OpponentCurriculumScheduler

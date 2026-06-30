@@ -142,7 +142,3 @@ The `env/` folder is part of the project code, not a virtual environment. It con
 - If imports such as `env.models` fail in Streamlit, run the app from the repository root.
 - If a dashboard looks empty, confirm that the expected JSON or checkpoint files exist under [experiments/](experiments/).
 - If you are using a fresh environment, verify that all RL and visualization packages are installed in the active virtual environment.
-
-## License
-
-No license file is currently included in the repository. Add one before publishing publicly if you want to define reuse terms.
