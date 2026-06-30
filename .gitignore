@@ -12,3 +12,6 @@ build/
 .mypy_cache/
 .pytest_cache/
 venv/
+reports/
+
+*.pt
