@@ -1,29 +1,24 @@
 
 
 
-from enum import Enum
-from typing import Callable, Optional
 
-from env import make_uniform_pricing_env
+
+
 from models.reward_normalizer import FixedRewardNormalizer
+from .type import EnvironmentType
 
-
-
-class EnvironmentType (str, Enum):
-    UNIFORM_PRICING = 'uniform_pricing'
-    BBP_PRICING = 'bbp_pricing'
 
 class EnvironmentFactory :
     
-    def __init__(self, env_type : EnvironmentType , reward_normalizer : type = FixedRewardNormalizer) -> None:
-        self._env_type = env_type
-        self.env_creator : Callable = self.resolve_env_creator (self._env_type)
+    def __init__(self,  reward_normalizer : type = FixedRewardNormalizer) -> None:
+        
         self.reward_normalizer = reward_normalizer
 
 
-    def create_environment (self,  opponent_type : str , config  ) :
-        
-        base_env = self.env_creator(
+    def create_environment (self, env_type: EnvironmentType,  opponent_type : str , config  ) :
+        from env.pricing_env import make_pricing_env
+        base_env = make_pricing_env(
+                environment_type= env_type,
                 opponent = opponent_type,
                 num_consumers = config.num_consumers,
                 episode_length = config.episode_length,
@@ -38,9 +33,5 @@ class EnvironmentFactory :
 
 
 
-    def resolve_env_creator (self, env_type : EnvironmentType):
-        if env_type == "uniform_pricing":
-            return make_uniform_pricing_env
-        else :
-            raise ValueError("Environment Type not valid")
+    
 

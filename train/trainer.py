@@ -1,15 +1,13 @@
 from typing import List, Tuple
 import numpy as np
-from train.uniform_training.uniform_training import evaluate_agent, save_checkpoint
+from train.utils import evaluate_agent, save_checkpoint
 
-from env import EnvironmentFactory
-from models import (
-    BaseReplayBuffer,
-    SAC,
-    CurriculumReplayBuffer,
-    FixedRewardNormalizer
-    )
-from train import CurriculumConfig, CurriculumTrainingLogger, OpponentCurriculumScheduler
+from env.factory import EnvironmentFactory
+from models.buffer import BaseReplayBuffer, CurriculumReplayBuffer
+from models.sac import SAC
+from models.reward_normalizer import FixedRewardNormalizer
+from train.curriculum import CurriculumConfig , OpponentCurriculumScheduler
+from train.logger import CurriculumTrainingLogger
 from train.config import TrainingConfig
 from train.metrics import TrainingMetrics
 

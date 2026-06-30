@@ -1,6 +1,7 @@
-from train import CurriculumConfig, CurriculumTrainer
+from train.curriculum import CurriculumConfig
+from train.trainer import CurriculumTrainer
 from train.config import TrainingConfig
-from train.pricing import PricingCurriculum
+from train.pricing.curriculum import PricingCurriculum
 import numpy as np
 
 training_config = TrainingConfig(

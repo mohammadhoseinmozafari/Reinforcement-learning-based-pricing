@@ -11,7 +11,8 @@ from typing import (
 import numpy as np
 
 from config.constants import EPISODE_LENGTH, NUM_CONSUMERS
-from env.uniform_pricing_env import UniformPricingEnv
+from env.factory import EnvironmentType
+from env.pricing_env import PricingEnv
 
 # =============================================================================
 # OPPONENT DIFFICULTY LEVELS
@@ -60,7 +61,7 @@ class CurriculumConfig:
     curriculum : Curriculum
     # Curriculum stages
     stages: List[OpponentStage] = field(default_factory=list)
-    
+    environment_type = EnvironmentType
 
     # Loss stabilization detection
     window_size : int = 30
@@ -283,7 +284,7 @@ class OpponentCurriculumScheduler:
         
         return new_stage
     
-    def create_environment(self, seed: Optional[int] = None)-> UniformPricingEnv:
+    def create_environment(self, seed: Optional[int] = None)-> PricingEnv:
         """
         Create environment for the current curriculum stage.
         
@@ -293,10 +294,11 @@ class OpponentCurriculumScheduler:
         Returns:
             Gym environment configured for current stage
         """
-        from env.uniform_pricing_env import make_uniform_pricing_env
+        from env import make_pricing_env
         
         # Create environment with current opponent
-        env = make_uniform_pricing_env(
+        env = make_pricing_env(
+            agent_config= self.config.environment_type,
             opponent=self.current_stage.opponent_type,
             num_consumers=self.config.num_consumers,
             episode_length=self.config.episode_length,

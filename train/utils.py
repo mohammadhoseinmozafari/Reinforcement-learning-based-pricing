@@ -1,9 +1,10 @@
 import gymnasium as gym
-from models import SAC
+from models.sac import SAC
 from typing import Tuple, Dict , Any  
 import os 
 import json
-from train import TrainingConfig, TrainingMetrics
+from train.config import TrainingConfig
+from train.metrics  import TrainingMetrics
 def evaluate_agent(
     env: gym.Env,
     agent: SAC,

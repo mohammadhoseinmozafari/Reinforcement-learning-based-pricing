@@ -10,9 +10,9 @@ Simplified single-agent environment for learning optimal uniform pricing.
 
 from typing import Dict, Tuple, Optional, Union
 import numpy as np
+from .type import EnvironmentType
 import gymnasium as gym
 from gymnasium import spaces
-from numpy.random import uniform
 
 
 from env.models import HotellingMarket
@@ -56,7 +56,7 @@ class PricingEnv(gym.Env):
     
     def __init__(
         self,
-        agent_config ,
+        environment_type : EnvironmentType,
         opponent_policy: Optional[OpponentPolicy] = None,
         num_consumers: int = NUM_CONSUMERS,
         episode_length: int = EPISODE_LENGTH,
@@ -66,7 +66,7 @@ class PricingEnv(gym.Env):
         Initialize pricing environment.
         
         Args:
-            agent_config : config of  agent 
+            environment_type : type of the env (uniform pricing or bbp) 
             opponent_policy: Policy for opponent (uses ConstantOpponentPolicy if None)
             num_consumers: Number of consumers in market
             episode_length: Total steps per episode
@@ -77,7 +77,7 @@ class PricingEnv(gym.Env):
         self.num_consumers = num_consumers
         self.episode_length = episode_length
         self.seed_value = seed
-        self.agent_config = agent_config
+        self.environment_type = environment_type
         
         self.market = HotellingMarket(num_consumers=num_consumers, seed=seed)
         
@@ -312,8 +312,9 @@ class PricingEnv(gym.Env):
         # Reset market
         self.market.reset(seed=self.seed_value)
         
+        own_regime = 0 if self.environment_type == "uniform_pricing" else 1
         # Force agent to uniform regime
-        self.market.set_regimes(self.agent_config.regime, self.opponent_policy.regime)
+        self.market.set_regimes(own_regime, self.opponent_policy.regime)
         
         # Reset opponent policy
         self.opponent_policy.reset(seed=seed)
@@ -381,8 +382,10 @@ class PricingEnv(gym.Env):
             "price_old": opp_prices.get("price_old", opp_prices.get("price_new", 5.0)),
         }
         
+        own_regime = 0 if self.environment_type == "uniform_pricing" else 1
+
         # Ensure uniform regime for agent only
-        self.market.set_regimes(self.agent_config.regime, self.opponent_policy.regime)
+        self.market.set_regimes(own_regime, self.opponent_policy.regime)
         
         # Execute market step
         demand_0, demand_1 = self.market.step(agent_prices, opp_prices_dict)
@@ -455,7 +458,7 @@ class PricingEnv(gym.Env):
 # =============================================================================
 
 def make_pricing_env(
-    agent_config,
+    environment_type : EnvironmentType ,
     opponent: Union[str, OpponentPolicy] = "passive_uniform",
     **env_kwargs
 ) -> PricingEnv:
@@ -478,7 +481,7 @@ def make_pricing_env(
     
     print(f'Training is initialized with opponent police: {opponent_policy}')
     return PricingEnv(
-        agent_config,
+        environment_type,
         opponent_policy=opponent_policy,
         **env_kwargs
     )

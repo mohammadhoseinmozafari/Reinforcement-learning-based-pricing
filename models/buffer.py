@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-from collections import defaultdict
-from unittest.mock import Base
 import numpy as np
 from collections import deque
 import random
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
-from train.uniform_training.curriculum import Curriculum
+from train.curriculum import Curriculum
 class BaseReplayBuffer(ABC):
     @abstractmethod
     def push(self , state, action , reward, next_state, done):
