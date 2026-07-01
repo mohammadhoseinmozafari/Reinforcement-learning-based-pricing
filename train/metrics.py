@@ -32,7 +32,9 @@ class TrainingMetrics:
     
     # Per-step tracking (for current episode)
     step_profits: List[float] = field(default_factory=list)
-    step_prices: List[float] = field(default_factory=list)
+    step_uniform_prices: List[float] = field(default_factory=list)
+    step_new_prices: List[float] = field(default_factory=list)
+    step_old_prices: List[float] = field(default_factory=list)
     step_market_shares: List[float] = field(default_factory=list)
     
     step_opp_profits: List[float] = field(default_factory=list)
@@ -69,7 +71,7 @@ class TrainingMetrics:
         self.step_profits.append(info.get("profit", 0.0))
         self.step_opp_profits.append(info.get("opponent_profit", 0.0))
 
-        # UniformPricingEnv uses ``price``; PricingEnv exposes all three prices.
+        # PricingEnv action order: uniform, BBP-new, BBP-old.
         self.step_uniform_prices.append(info.get("uniform_price", 0.0))
         self.step_new_prices.append(info.get("bbp_price_new", 0.0))
         self.step_old_prices.append(info.get("bbp_price_old", 0.0))

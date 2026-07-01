@@ -30,11 +30,9 @@ def evaluate_agent(
         raise ValueError("num_episodes must be positive")
 
     total_reward = 0.0
-    mean_values = []
-    std_values = []
-    raw_log_std_values = []
-    log_std_values = []
-    actions_taken = []
+    stat_names = ("mean", "std", "raw_log_std", "log_std")
+    policy_samples = {name: [] for name in stat_names}
+    action_samples = []
     
     for _ in range(num_episodes):
         state, _ = env.reset()
@@ -42,16 +40,18 @@ def evaluate_agent(
         for _ in range(max_steps):
             
             stats = agent.get_policy_stats(state)
-            mean_values.extend(np.asarray(stats["mean"], dtype=float).ravel())
-            std_values.extend(np.asarray(stats["std"], dtype=float).ravel())
-            raw_log_std_values.extend(
-                np.asarray(stats["raw_log_std"], dtype=float).ravel()
-            )
-            log_std_values.extend(np.asarray(stats["log_std"], dtype=float).ravel())
+            for name in stat_names:
+                values = np.asarray(stats[name], dtype=float).ravel()
+                if values.size != 3:
+                    raise ValueError(f"Expected 3 policy heads, got {values.size}")
+                policy_samples[name].append(values)
 
             action = agent.select_action(state, deterministic=True)
             
-            actions_taken.extend(np.asarray(action, dtype=float).ravel())
+            action_values = np.asarray(action, dtype=float).ravel()
+            if action_values.size != 3:
+                raise ValueError(f"Expected 3 action heads, got {action_values.size}")
+            action_samples.append(action_values)
             next_state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += float(reward)
             state = next_state
@@ -61,13 +61,17 @@ def evaluate_agent(
         
         total_reward += episode_reward
     
-    policy_stats ={
-        "mean": float(np.mean(mean_values)),
-        "raw_log_std": float(np.mean(raw_log_std_values)),
-        "log_std": float(np.mean(log_std_values)),
-        "std": float(np.mean(std_values)),
-        "action": float(np.mean(actions_taken)),
+    averaged = {
+        name: np.mean(np.asarray(samples), axis=0)
+        for name, samples in policy_samples.items()
+    }
+    averaged_actions = np.mean(np.asarray(action_samples), axis=0)
+    policy_stats = {}
+    for index, head in enumerate(("uniform", "new", "old")):
+        policy_stats[head] = {
+            name: float(values[index]) for name, values in averaged.items()
         }
+        policy_stats[head]["action"] = float(averaged_actions[index])
         
     return total_reward / num_episodes, policy_stats
 
@@ -99,12 +103,16 @@ def save_checkpoint(
         "episode_profits": metrics.episode_profits,
         "episode_opponent_profits": metrics.episode_opp_profits,
         
-        "episode_prices": metrics.episode_prices,
+        "episode_uniform_prices": metrics.episode_uniform_prices,
+        "episode_new_prices": metrics.episode_new_prices,
+        "episode_old_prices": metrics.episode_old_prices,
         "episode_opponent_prices_uniform": metrics.episode_opp_uniform_prices,
         "episode_opponent_prices_new": metrics.episode_opp_new_prices,
         "episode_opponent_prices_old": metrics.episode_opp_old_prices,
         
         "episode_market_shares": metrics.episode_market_shares,
+        "episode_regimes": metrics.episode_regimes,
+        "episode_opponent_regimes": metrics.episode_opp_regimes,
         "eval_rewards": metrics.eval_rewards,
         "critic_losses": metrics.critic_losses,
         "actor_losses": metrics.actor_losses,
@@ -124,4 +132,3 @@ def save_checkpoint(
     }
     with open(config_path, 'w') as f:
         json.dump(config_dict, f, indent=2)
-

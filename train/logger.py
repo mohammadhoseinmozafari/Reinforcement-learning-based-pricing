@@ -57,6 +57,25 @@ def fmt_num(value, kind: str = "auto") -> str:
     return str(value)
 
 
+def _recent_mean(values: List[float], window: int) -> float:
+    """Return a stable float mean for the most recent metric window."""
+    return float(np.mean(values[-window:])) if values else 0.0
+
+
+def _regime_label(value: float, compact: bool = False) -> str:
+    """Convert an averaged binary regime into a human-readable label."""
+    if np.isclose(value, 1.0):
+        return "BBP"
+    if np.isclose(value, 0.0):
+        return "UNI" if compact else "Uniform"
+    return f"MIX({value:.1f})" if compact else f"Mixed ({value:.2f})"
+
+
+def _is_converged(value: Any) -> bool:
+    """Extract the stability flag from scheduler ``(stable, change)`` values."""
+    return bool(value[0]) if isinstance(value, (tuple, list)) else bool(value)
+
+
 class Box:
     """
     A simple rounded box renderer that tracks visible width correctly,
@@ -291,22 +310,24 @@ class CurriculumTrainingLogger:
         info = curriculum.get_info()
         conv = info["convergence_status"]
 
-        avg_reward = np.mean(metrics.episode_rewards[-config.eval_freq:])
-        avg_profit = np.mean (metrics.episode_profits[-config.eval_freq:])
-        avg_price = np.mean(metrics.episode_prices[-config.eval_freq:])
-        avg_opp_price_uniform = np.mean(metrics.episode_opp_uniform_prices[-config.eval_freq:])
-        avg_opp_price_new = np.mean(metrics.episode_opp_new_prices[-config.eval_freq:])
-        avg_opp_price_old = np.mean(metrics.episode_opp_old_prices[-config.eval_freq:])
-        avg_opp_regime = np.mean(metrics.episode_opp_regimes[-config.eval_freq:])
-        avg_share = np.mean(metrics.episode_market_shares[-config.eval_freq:])
+        window = config.eval_freq
+        avg_reward = _recent_mean(metrics.episode_rewards, window)
+        avg_profit = _recent_mean(metrics.episode_profits, window)
+        avg_opp_profit = _recent_mean(metrics.episode_opp_profits, window)
+        agent_prices = (
+            _recent_mean(metrics.episode_uniform_prices, window),
+            _recent_mean(metrics.episode_new_prices, window),
+            _recent_mean(metrics.episode_old_prices, window),
+        )
+        opponent_prices = (
+            _recent_mean(metrics.episode_opp_uniform_prices, window),
+            _recent_mean(metrics.episode_opp_new_prices, window),
+            _recent_mean(metrics.episode_opp_old_prices, window),
+        )
+        agent_regime = _regime_label(_recent_mean(metrics.episode_regimes, window))
+        opp_regime = _regime_label(_recent_mean(metrics.episode_opp_regimes, window))
+        avg_share = _recent_mean(metrics.episode_market_shares, window)
         lrs = agent.get_current_lrs()
-
-        if avg_opp_regime == 1.0:
-            opp_regime = "BBP"
-        elif avg_opp_regime == 0.0:
-            opp_regime = "Uniform"
-        else:
-            opp_regime = f"Mixed ({avg_opp_regime:.2f})"
 
         box_width = max(82, len(f"Episode {episode + 1}/{config.num_episodes}") + 30)
         box = Box(box_width)
@@ -316,17 +337,30 @@ class CurriculumTrainingLogger:
 
         # Performance metrics
         print(box.row(self.c(Color.BOLD + Color.BLUE, "Performance Metrics")))
-        print(box.row(f"Avg Profit:  {avg_profit}"))
         print(box.row_cols(
             f"Avg Reward:  {self.c(Color.GREEN, f'{avg_reward:>8.1f}')}",
             f"Eval Reward: {self.c(Color.GREEN, f'{eval_reward:>8.1f}')}",
             col_width,
         ))
         print(box.row_cols(
-            f"Avg Price:   {self.c(Color.GREEN, f'{avg_price:>8.2f}')}",
-            f"Market Share:{self.c(Color.GREEN, f'{avg_share:>8.2f}')}",
+            f"Agent Profit: {self.c(Color.GREEN, f'{avg_profit:>8.1f}')}",
+            f"Opponent Profit: {self.c(Color.GREEN, f'{avg_opp_profit:>8.1f}')}",
             col_width,
         ))
+        print(box.row(f"Market Share: {self.c(Color.GREEN, f'{avg_share:.3f}')}"))
+
+        print(box.divider())
+
+        # Agent pricing
+        agent_regime_color = Color.GREEN if agent_regime == "BBP" else Color.CYAN
+        print(box.row(self.c(Color.BOLD + Color.BLUE, "Agent Pricing")))
+        print(box.row(f"Regime: {self.c(agent_regime_color, agent_regime)}"))
+        print(box.row_cols(
+            f"Uniform Price: {self.c(Color.GREEN, f'{agent_prices[0]:.2f}')}",
+            f"BBP New Price: {self.c(Color.GREEN, f'{agent_prices[1]:.2f}')}",
+            col_width,
+        ))
+        print(box.row(f"BBP Old Price: {self.c(Color.GREEN, f'{agent_prices[2]:.2f}')}"))
 
         print(box.divider())
 
@@ -339,11 +373,11 @@ class CurriculumTrainingLogger:
         print(box.row(self.c(Color.BOLD + Color.BLUE, "Opponent Information")))
         print(box.row(f"Regime: {self.c(regime_color, opp_regime)}"))
         print(box.row_cols(
-            f"BBP New Price: {self.c(Color.GREEN, f'{avg_opp_price_new:.2f}')}",
-            f"BBP Old Price: {self.c(Color.GREEN, f'{avg_opp_price_old:.2f}')}",
+            f"Uniform Price: {self.c(Color.GREEN, f'{opponent_prices[0]:.2f}')}",
+            f"BBP New Price: {self.c(Color.GREEN, f'{opponent_prices[1]:.2f}')}",
             col_width,
         ))
-        print(box.row(f"Uniform Price: {self.c(Color.GREEN, f'{avg_opp_price_uniform:.2f}')}"))
+        print(box.row(f"BBP Old Price: {self.c(Color.GREEN, f'{opponent_prices[2]:.2f}')}"))
 
         print(box.divider())
 
@@ -355,35 +389,32 @@ class CurriculumTrainingLogger:
             f"Actor LR: {self.c(Color.GREEN, f'{lrs['actor_lr']:.2e}')}",
             col_width,
         ))
-        print(box.row(f"Current Stage: {self.c(stage_color, info['stage_name'])}"))
+        print(box.row_cols(
+            f"Critic LR: {self.c(Color.GREEN, f'{lrs['critic_lr']:.2e}')}",
+            f"Current Stage: {self.c(stage_color, info['stage_name'])}",
+            col_width,
+        ))
 
         print(box.divider())
 
-        #Policy Stats
-        print(box.row(self.c(Color.BOLD + Color.BLUE, "Policy Stats")))
-
-        print(box.row_cols(
-            
-            f"Mean: {self.c(Color.GREEN, f'{policy_stats["mean"]:.4f}')}",
-            f"Std:    {self.c(Color.GREEN, f'{policy_stats["std"]:.4f}')}",
-            
-            col_width,
-        ))
-
-        print(box.row_cols(
-            
-            f"Raw Log Std: {self.c(Color.GREEN, f'{policy_stats["raw_log_std"]:.4f}')}",
-            f"Log Std:    {self.c(Color.GREEN, f'{policy_stats["log_std"]:.4f}')}",
-            
-            col_width,
-        ))
-
-        print(box.row(f"Action: {self.c(Color.GREEN, f'{policy_stats["action"]:.4f}')}"))
+        # Policy statistics remain normalized to the SAC action space [-1, 1].
+        print(box.row(self.c(Color.BOLD + Color.BLUE, "Policy Heads (Normalized)")))
+        for head, label in (("uniform", "Uniform"), ("new", "BBP New"), ("old", "BBP Old")):
+            stats = policy_stats[head]
+            print(box.row(
+                f"{label:<8}  "
+                f"Action {self.c(Color.GREEN, f'{stats['action']:+.4f}')}  "
+                f"Mean {self.c(Color.GREEN, f'{stats['mean']:+.4f}')}  "
+                f"Std {self.c(Color.GREEN, f'{stats['std']:.4f}')}  "
+                f"LogStd {self.c(Color.GREEN, f'{stats['log_std']:+.4f}')}"
+            ))
 
         print(box.divider())
 
         # Convergence status
-        critic_ok, actor_ok, alpha_ok = conv.get("critic", False), conv.get("actor", False), conv.get("alpha", False)
+        critic_ok = _is_converged(conv.get("critic", False))
+        actor_ok = _is_converged(conv.get("actor", False))
+        alpha_ok = _is_converged(conv.get("alpha", False))
 
         def status(ok: bool) -> str:
             label = "CONVERGED" if ok else "NOT CONV"
@@ -415,29 +446,32 @@ class CurriculumTrainingLogger:
         def icon(ok: bool) -> str:
             return self.c(Color.GREEN, "✓") if ok else self.c(Color.RED, "✗")
 
-        avg_reward = np.mean(metrics.episode_rewards[-config.eval_freq:])
-        avg_price = np.mean(metrics.episode_prices[-config.eval_freq:])
-        avg_share = np.mean(metrics.episode_market_shares[-config.eval_freq:])
-        avg_opp_regime = np.mean(metrics.episode_opp_regimes[-config.eval_freq:])
+        window = config.eval_freq
+        avg_reward = _recent_mean(metrics.episode_rewards, window)
+        avg_profit = _recent_mean(metrics.episode_profits, window)
+        avg_opp_profit = _recent_mean(metrics.episode_opp_profits, window)
+        avg_uniform = _recent_mean(metrics.episode_uniform_prices, window)
+        avg_new = _recent_mean(metrics.episode_new_prices, window)
+        avg_old = _recent_mean(metrics.episode_old_prices, window)
+        avg_share = _recent_mean(metrics.episode_market_shares, window)
+        opp_regime = _regime_label(
+            _recent_mean(metrics.episode_opp_regimes, window), compact=True
+        )
         lrs = agent.get_current_lrs()
 
-        if avg_opp_regime == 1.0:
-            opp_regime = "BBP"
-        elif avg_opp_regime == 0.0:
-            opp_regime = "UNI"
-        else:
-            opp_regime = f"MIX({avg_opp_regime:.1f})"
+        critic_ok = _is_converged(conv.get("critic", False))
+        actor_ok = _is_converged(conv.get("actor", False))
+        alpha_ok = _is_converged(conv.get("alpha", False))
 
         status_line = (
             f"Ep {episode + 1:>4}/{config.num_episodes:<4} │ "
             f"R:{avg_reward:>7.1f} E:{eval_reward:>7.1f} │ "
-            f"P:{avg_price:>5.2f} S:{avg_share:>5.2f} │ "
+            f"Π:{avg_profit:>6.1f}/{avg_opp_profit:>6.1f} S:{avg_share:>5.2f} │ "
+            f"U:{avg_uniform:>4.2f} N:{avg_new:>4.2f} O:{avg_old:>4.2f} │ "
             f"Opp:{opp_regime:<6} │ "
             f"α:{agent.alpha:.3f} LR:{lrs['actor_lr']:.1e} │ "
             f"Stg:{info['stage_name']:<10} │ "
-            f"C:{icon(conv.get('critic', False))} "
-            f"A:{icon(conv.get('actor', False))} "
-            f"α:{icon(conv.get('alpha', False))}"
+            f"C:{icon(critic_ok)} A:{icon(actor_ok)} α:{icon(alpha_ok)}"
         )
 
         box_width = max(visible_len(status_line) + 4, 80)

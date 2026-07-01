@@ -37,8 +37,9 @@ print("=" * 60)
     
 print(f"\nFinal 50 episodes:")
 print(f"  Avg Reward: {np.mean(metrics.episode_rewards[-50:]):.2f}")
-print(f"  Avg Price: {np.mean(metrics.episode_prices[-50:]):.2f}")
+print(f"  Avg Uniform Price: {np.mean(metrics.episode_uniform_prices[-50:]):.2f}")
+print(f"  Avg BBP New Price: {np.mean(metrics.episode_new_prices[-50:]):.2f}")
+print(f"  Avg BBP Old Price: {np.mean(metrics.episode_old_prices[-50:]):.2f}")
 print(f"  Avg Market Share: {np.mean(metrics.episode_market_shares[-50:]):.2f}")
     
 print(f"\nResults saved to: {training_config.save_dir}")
-
