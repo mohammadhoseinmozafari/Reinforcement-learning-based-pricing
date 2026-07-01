@@ -62,14 +62,20 @@ The landing page links to:
 
 ## Running Training
 
-The repository includes separate entrypoints for different training setups:
+All pricing experiments use the same YAML-driven entrypoint:
 
 ```bash
-python uniform_training_main.py
-python uniform_vs_bbp_training.py
+python pricing_train.py --config config/uniform_vs_bbp.yaml
 ```
 
-These scripts save checkpoints and metrics under [experiments/](experiments/).
+Available experiment files cover uniform and BBP agents against uniform, BBP,
+or mixed curricula. Useful one-off overrides do not require editing YAML:
+
+```bash
+python pricing_train.py --config config/bbp_vs_mixed.yaml --episodes 50 --seed 7 --device cpu
+```
+
+Checkpoints and metrics are saved to the experiment's configured `save_dir`.
 
 ## Running Evaluation
 
@@ -102,16 +108,14 @@ python opt_main.py
 
 ## Configuration
 
-The main environment and training constants live in [config/constants.py](config/constants.py).
-Key settings include:
+Configuration is composed from three YAML layers:
 
-- Number of consumers.
-- Episode length.
-- Price ranges for uniform and BBP regimes.
-- Strategy-cycle length.
-- Observation dimensions.
+- `config/*_vs_*.yaml` selects the agent strategy, training profile, curriculum, and output path.
+- `config/training/default.yaml` contains shared environment, SAC, training, evaluation, and logging settings.
+- `config/curricula/*.yaml` contains ordered opponent stages and convergence settings.
 
-If you want to adjust the market behavior, start there.
+Low-level market price bounds and economic constants remain in
+`config/constants.py`.
 
 ## Notes On The Environment
 
@@ -122,7 +126,7 @@ The `env/` folder is part of the project code, not a virtual environment. It con
 ### Train a policy
 
 1. Activate your environment.
-2. Run `python uniform_training_main.py` or `python uniform_vs_bbp_training.py`.
+2. Run `python pricing_train.py --config config/uniform_vs_uniform.yaml`.
 3. Inspect the saved metrics in [experiments/](experiments/).
 
 ### Evaluate a trained policy

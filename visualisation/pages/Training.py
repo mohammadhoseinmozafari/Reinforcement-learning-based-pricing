@@ -26,40 +26,24 @@ opp_type = st.sidebar.radio(
 
 run = 1
 path_resolver = PathResolver()
-path = path_resolver.resolve_train_path(
-    phase= training_phase,
-    opponent_type=opp_type,
-    run = 1
-)
-
-
+path = "experiments/pricing/train/runs/1"
 
 data = load_data(f"{path}/metrics_final.json")
 
-if opp_type == "Uniform Pricing Opponent":
-# DataFrame for episode metrics
-    df_metrics = pd.DataFrame({
-        'episode': range(len(data['episode_rewards'])),
-        'rewards': data['episode_rewards'],
-        'profits': data['episode_profits'],
-        'opponent_profits': data['episode_opponent_profits'],
-        'prices': data['episode_prices'],
-        'opponent_prices': data['episode_opponent_prices'],
-        'market_share': data['episode_market_shares']
-    })
-elif opp_type == "BBP Opponent":
-    df_metrics = pd.DataFrame({
-        'episode': range(len(data['episode_rewards'])),
-        'rewards': data['episode_rewards'],
-        'profits': data['episode_profits'],
-        'opponent_profits': data['episode_opponent_profits'],
-        'prices': data['episode_prices'],
-        'opponent_prices_new': data['episode_opponent_prices_new'],
-        'opponent_prices_old': data['episode_opponent_prices_old'],
-        'market_share': data['episode_market_shares']
-    })
-else:
-    raise ValueError
+# The general pricing environment emits all three agent and opponent prices.
+df_metrics = pd.DataFrame({
+    'episode': range(len(data['episode_rewards'])),
+    'rewards': data['episode_rewards'],
+    'profits': data['episode_profits'],
+    'opponent_profits': data['episode_opponent_profits'],
+    'uniform_price': data['episode_uniform_prices'],
+    'new_price': data['episode_new_prices'],
+    'old_price': data['episode_old_prices'],
+    'opponent_uniform_price': data['episode_opponent_prices_uniform'],
+    'opponent_new_price': data['episode_opponent_prices_new'],
+    'opponent_old_price': data['episode_opponent_prices_old'],
+    'market_share': data['episode_market_shares'],
+})
 # Derived metrics
 final_avg_reward = np.mean(data['episode_rewards'][-50:]) if len(data['episode_rewards']) >= 50 else np.mean(data['episode_rewards'])
 final_market_share = data['episode_market_shares'][-1]
@@ -392,113 +376,36 @@ with tab1:
         )
         st.plotly_chart(fig)
     
-    if opp_type=="Uniform Pricing Opponent":
-        with col2:
-            st.markdown("#### Price Competition")
-            fig = go.Figure()
+    with col2:
+        st.markdown("#### Price Competition")
+        fig = go.Figure()
+        price_traces = (
+            ('episode_uniform_prices', 'Agent Uniform', colors['harsh_teal'], 'solid'),
+            ('episode_new_prices', 'Agent BBP New', colors['harsh_blue'], 'solid'),
+            ('episode_old_prices', 'Agent BBP Old', colors['harsh_purple'], 'solid'),
+            ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'dot'),
+            ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'dot'),
+            ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'dot'),
+        )
+        for key, name, color, dash in price_traces:
             fig.add_trace(go.Scatter(
                 x=df_metrics['episode'],
-                y=data['episode_prices'],
-                name='Agent Price',
+                y=data[key],
+                name=name,
                 mode='lines',
-                line=dict(color=colors['harsh_blue'], width=1.5),
-            
+                line=dict(color=color, width=2, dash=dash),
             ))
-            fig.add_trace(go.Scatter(
-                x=df_metrics['episode'],
-                y=data['episode_opponent_prices'],
-                name='Opponent Price',
-                mode='lines',
-                line=dict(color=colors['harsh_pink'], width=2.5),
-            
-
-            ))
-            fig.update_layout(
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                height=350,
-                margin=dict(l=0, r=0, t=0, b=0),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1,
-                    font=dict(size=12)
-                ),
-                xaxis=dict(
-                    showgrid=False,
-                    zeroline=False,
-                    tickfont=dict(size=12)
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='#E5E5EA',
-                    zeroline=False,
-                    tickfont=dict(size=12)
-                ),
-                hovermode='x unified',
-
-            )
-            st.plotly_chart(fig)
-    elif opp_type == "BBP Opponent":
-        with col2:
-            st.markdown("#### Price Competition")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df_metrics['episode'],
-                y=data['episode_prices'],
-                name='Agent Price',
-                mode='lines',
-                line=dict(color=colors['harsh_teal'], width=2.),
-            
-            ))
-            fig.add_trace(go.Scatter(
-                x=df_metrics['episode'],
-                y=data['episode_opponent_prices_new'],
-                name='Opponent Price for new costumers',
-                mode='lines',
-                line=dict(color=colors['harsh_purple'], width=2.5),
-            
-
-            ))
-            fig.add_trace(go.Scatter(
-                x=df_metrics['episode'],
-                y=data['episode_opponent_prices_old'],
-                name='Opponent Price for established costumers',
-                mode='lines',
-                line=dict(color=colors['harsh_blue'], width=2.5),
-            
-
-            ))
-            fig.update_layout(
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                height=350,
-                margin=dict(l=0, r=0, t=0, b=0),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1,
-                    font=dict(size=12)
-                ),
-                xaxis=dict(
-                    showgrid=False,
-                    zeroline=False,
-                    tickfont=dict(size=12)
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='#E5E5EA',
-                    zeroline=False,
-                    tickfont=dict(size=12)
-                ),
-                hovermode='x unified',
-
-            )
-            st.plotly_chart(fig)
+        fig.update_layout(
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            height=350,
+            margin=dict(l=0, r=0, t=0, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(showgrid=False, zeroline=False),
+            yaxis=dict(showgrid=True, gridcolor='#E5E5EA', zeroline=False),
+            hovermode='x unified',
+        )
+        st.plotly_chart(fig)
 
         
 
@@ -575,17 +482,12 @@ with tab2:
             f"{cum_agent[-1]:.1f}",
             delta=f"{((cum_agent[-1] - cum_opponent[-1]) / abs(cum_opponent[-1]) * 100):.1f}% vs opponent"
         )
-    if opp_type == "Uniform Pricing Opponent":
-        with col2:
-            st.markdown("#### Final Episode Metrics")
-            st.metric("Agent Price", f"{data['episode_prices'][-1]:.2f}")
-            st.metric("Opponent Price", f"{data['episode_opponent_prices'][-1]:.2f}")
-    elif opp_type == "BBP Opponent":
-        with col2:
-            st.markdown("#### Final Episode Metrics")
-            st.metric("Agent Price", f"{data['episode_prices'][-1]:.2f}")
-            st.metric("Opponent Price (For New Costumers)", f"{data['episode_opponent_prices_new'][-1]:.2f}")
-            st.metric("Opponent Price (For Established Costumers)", f"{data['episode_opponent_prices_old'][-1]:.2f}")
+    with col2:
+        st.markdown("#### Final Agent Prices")
+        price_cols = st.columns(3)
+        price_cols[0].metric("Uniform", f"{data['episode_uniform_prices'][-1]:.2f}")
+        price_cols[1].metric("BBP New", f"{data['episode_new_prices'][-1]:.2f}")
+        price_cols[2].metric("BBP Old", f"{data['episode_old_prices'][-1]:.2f}")
 # ---------- Tab 3: Learning Dynamics ----------
 with tab3:
     col1, col2 = st.columns(2)

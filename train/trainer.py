@@ -3,58 +3,33 @@ import numpy as np
 from train.utils import evaluate_agent, save_checkpoint
 
 from env.factory import EnvironmentFactory
-from models.buffer import BaseReplayBuffer, CurriculumReplayBuffer
+from models.buffer import BaseReplayBuffer
 from models.sac import SAC
-from models.reward_normalizer import FixedRewardNormalizer
 from train.curriculum import CurriculumConfig , OpponentCurriculumScheduler
 from train.logger import CurriculumTrainingLogger
 from train.config import TrainingConfig
 from train.metrics import TrainingMetrics
 
-class CurriculumTrainer :
+class CurriculumTrainer:
 
 
-    def __init__(self,  config : TrainingConfig, curriculum_config: CurriculumConfig) -> None:
+    def __init__(
+        self,
+        config: TrainingConfig,
+        curriculum_config: CurriculumConfig,
+        env_factory: EnvironmentFactory,
+        base_env,
+        env,
+        replay_buffer: BaseReplayBuffer,
+        agent: SAC,
+    ) -> None:
         self.config = config
         self.curriculum_config = curriculum_config
-        
-
-
-    def create_replay_buffer (self)  -> CurriculumReplayBuffer:
-        
-        return CurriculumReplayBuffer(
-            capacity= self.config.buffer_size,
-            batch_size=self.config.batch_size,
-            curriculum= self.curriculum_config.curriculum
-        )
-    
-    def create_agent (self , env , replay_buffer : BaseReplayBuffer) -> SAC:
-        
-        state_dim = env.observation_space.shape[0]
-        action_dim = env.action_space.shape[0]
-
-        agent = SAC(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            hidden_dim=self.config.hidden_dim,
-            lr_actor=self.config.lr_actor,
-            lr_critic=self.config.lr_critic,
-            lr_alpha=self.config.lr_alpha,
-            gamma=self.config.gamma,
-            tau=self.config.tau,
-            alpha= self.config.alpha,
-            auto_alpha=self.config.auto_alpha,
-            replay_buffer= replay_buffer,
-            target_entropy=self.config.target_entropy,
-            log_std_min=self.config.log_std_min,
-            log_std_max=self.config.log_std_max,
-            batch_size=self.config.batch_size,
-            lr_scheduler=self.config.lr_scheduler,
-            lr_scheduler_kwargs=self.config.lr_scheduler_kwargs,
-            device=self.config.device,
-        )
-
-        return agent
+        self.env_factory = env_factory
+        self.base_env = base_env
+        self.env = env
+        self.replay_buffer = replay_buffer
+        self.agent = agent
     
 
     def warmup (self, env , replay_buffer: BaseReplayBuffer, steps:int , seed: int) -> None:
@@ -106,35 +81,15 @@ class CurriculumTrainer :
 
             curriculum = OpponentCurriculumScheduler(self.curriculum_config)
             logger = CurriculumTrainingLogger(self.curriculum_config, verbose= self.config.verbose)
-            env_factory = EnvironmentFactory(
-                env_type= self.config.environment_type,
-                reward_normalizer= FixedRewardNormalizer
-            )
-
-
-
-            current_opponent = curriculum.current_opponent
-            
-
-            base_env , env = env_factory.create_environment(
-                config = self.config,
-                opponent_type=current_opponent,
-            )
-
-
+            env_factory = self.env_factory
+            base_env = self.base_env
+            env = self.env
+            replay_buffer = self.replay_buffer
+            agent = self.agent
 
             logger.print_training_header()
             
-            # create replay buffer
-            replay_buffer = self.create_replay_buffer ()
             logger.log_replay_buffer(replay_buffer)
-                
-
-            # Create SAC agent
-            agent = self.create_agent(
-                env= env,
-                replay_buffer= replay_buffer
-            )
             logger.log_agent_config(agent)
 
             metrics = TrainingMetrics()

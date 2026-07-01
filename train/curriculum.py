@@ -6,13 +6,16 @@ from typing import (
     Dict,
     Optional,
     List,
-    Tuple )
+    Tuple,
+    TYPE_CHECKING )
 
 import numpy as np
 
 from config.constants import EPISODE_LENGTH, NUM_CONSUMERS
-from env.factory import EnvironmentType
-from env.pricing_env import PricingEnv
+from env.type import EnvironmentType
+
+if TYPE_CHECKING:
+    from env.pricing_env import PricingEnv
 
 # =============================================================================
 # OPPONENT DIFFICULTY LEVELS
@@ -284,7 +287,7 @@ class OpponentCurriculumScheduler:
         
         return new_stage
     
-    def create_environment(self, seed: Optional[int] = None)-> PricingEnv:
+    def create_environment(self, seed: Optional[int] = None) -> "PricingEnv":
         """
         Create environment for the current curriculum stage.
         

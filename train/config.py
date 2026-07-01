@@ -1,8 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from config.constants import NUM_CONSUMERS, EPISODE_LENGTH
-from typing import Optional, Dict, List
-from env import EnvironmentType
-from train.curriculum import Curriculum, OpponentStage
+from typing import Optional, Dict
+from env.type import EnvironmentType
 # =============================================================================
 # TRAINING CONFIGURATION
 # =============================================================================

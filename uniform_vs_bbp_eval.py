@@ -9,7 +9,9 @@ from evaluation.config import EvaluationConfig
 from evaluation.evaluator import Evaluator
 from models.buffer import ReplayBuffer
 from models.sac import SAC
-from train.pricing.curriculum import PricingCurriculum
+from pathlib import Path
+
+from train.experiment import load_curriculum_config
 
 MODEL_PATH = "experiments/uniform_pricing/bbp_opp/runs/1/sac_uniform_final.pt"
 SAVE_PATH = "experiments/uniform_pricing/bbp_opp/eval"
@@ -31,10 +33,13 @@ def main() -> None:
     agent.load(config.model_path)
     os.makedirs(SAVE_PATH, exist_ok=True)
 
-    opponents = [
-        name for name in PricingCurriculum().opponent_types
-        if name.endswith("_bbp")
-    ]
+    curriculum = load_curriculum_config(
+        Path(__file__).parent / "config/curricula/bbp.yaml",
+        config.env_type,
+        config.num_consumers,
+        config.episode_length,
+    )
+    opponents = curriculum.curriculum.opponent_types
     for opponent in opponents:
         base_env, env = factory.create_environment(opponent, config)
         try:
