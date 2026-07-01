@@ -15,7 +15,7 @@ st.sidebar.markdown("### Settings")
 stage= "train"
 training_phase = st.sidebar.radio(
     "Training Phase",
-    ["Uniform Pricing"], #"Behavior Based Pricing"],
+    ["Uniform Pricing" ,"Behavior Based Pricing"],
     index=0
 )
 
@@ -380,13 +380,13 @@ with tab1:
         if opp_type == "BBP Opponent":
             price_traces = (
                 ('episode_uniform_prices', 'Agent Uniform', colors['harsh_teal'], 'solid'),
-                ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'dot'),
-                ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'dot'),
+                ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_red'], 'solid'),
+                ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_blue'], 'solid'),
             )
         else :
             price_traces = (
                 ('episode_uniform_prices', 'Agent Uniform', colors['harsh_teal'], 'solid'),
-                ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'dot'),
+                ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'solid'),
                 )
 
     else :
@@ -395,14 +395,14 @@ with tab1:
             price_traces = (
                 ('episode_new_prices', 'Agent BBP New', colors['harsh_blue'], 'solid'),
                 ('episode_old_prices', 'Agent BBP Old', colors['harsh_purple'], 'solid'),
-                ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'dot'),
-                ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'dot'),
+                ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'solid'),
+                ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'solid'),
             )
         else:
             price_traces = (
                 ('episode_new_prices', 'Agent BBP New', colors['harsh_blue'], 'solid'),
                 ('episode_old_prices', 'Agent BBP Old', colors['harsh_purple'], 'solid'),
-                ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'dot'),
+                ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'solid'),
             )
 
     with col2:
@@ -414,7 +414,7 @@ with tab1:
                 y=data[key],
                 name=name,
                 mode='lines',
-                line=dict(color=color, width=2, dash=dash),
+                line=dict(color=color, width=2.5, dash=dash),
             ))
         fig.update_layout(
             plot_bgcolor='white',

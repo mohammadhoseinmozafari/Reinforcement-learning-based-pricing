@@ -14,6 +14,7 @@ colors = {
     'harsh_gray'    :   "#212125",   
     'soft_yellow'   :   '#FFF5C0',
     'soft_red'      :   "#F68C9D",
+    'harsh_red'      :  "#FA3657",
 }
 st.markdown("""
 <style>
