@@ -1,0 +1,15 @@
+scheduler:
+  window_size: 20
+  change_threshold: 0.04
+  monitor_critic: true
+  monitor_actor: true
+  monitor_alpha: false
+  min_episodes_per_stage: 100
+  max_episodes_per_stage: 250
+
+stages:
+  - {name: premium_bbp, opponent_type: premium_bbp, difficulty: tutorial, description: "Fixed BBP prices 3.0/4.0, easiest"}
+  - {name: premium_passive_bbp, opponent_type: premium_passive_bbp, difficulty: tutorial, description: "Fixed BBP prices 2.5/3.5"}
+  - {name: passive_bbp, opponent_type: passive_bbp, difficulty: tutorial, description: "Fixed BBP prices 2.0/3.0"}
+  - {name: passive_aggressive_bbp, opponent_type: passive_aggressive_bbp, difficulty: tutorial, description: "Fixed BBP prices 1.5/2.5"}
+  - {name: aggressive_bbp, opponent_type: aggressive_bbp, difficulty: tutorial, description: "Fixed BBP prices 1.0/2.0, most competitive"}
