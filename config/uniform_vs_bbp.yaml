@@ -1,0 +1,5 @@
+name: uniform_vs_bbp
+agent_strategy: uniform_pricing
+training_config: training/default.yaml
+curriculum_config: curricula/bbp.yaml
+save_dir: experiments/uniform_vs_bbp/runs/1

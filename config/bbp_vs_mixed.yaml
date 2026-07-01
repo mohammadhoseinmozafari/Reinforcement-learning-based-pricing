@@ -1,0 +1,5 @@
+name: bbp_vs_mixed
+agent_strategy: bbp_pricing
+training_config: training/default.yaml
+curriculum_config: curricula/mixed.yaml
+save_dir: experiments/bbp_vs_mixed/runs/1
