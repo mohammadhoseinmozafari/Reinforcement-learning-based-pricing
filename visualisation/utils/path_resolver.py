@@ -21,12 +21,12 @@ class PathResolver :
     def resolve_train_path(self, phase: str, opponent_type : str, run: int ) -> str:
         phase = self._resolve_phase(phase)
         opponent_type = self._resolve_opp_type(opponent_type)
-        return f"experiments/{phase.value}/{opponent_type.value}/runs/{run}"
+        return f"experiments/{phase}_vs_{opponent_type}/runs/{run}"
     
     def resolve_eval_path (self , phase: str , opponent_type : str) -> str:
         phase = self._resolve_phase(phase)
         opponent_type = self._resolve_opp_type(opponent_type)
-        return f"experiments/{phase.value}/{opponent_type.value}/eval/"
+        return f"experiments/{phase}_vs_{opponent_type}/eval"
 
 
     def _resolve_stage (self, stage : str) -> Stage:
@@ -38,22 +38,22 @@ class PathResolver :
         else:
             raise ValueError
         
-    def _resolve_phase (self, phase: str) -> Phase:
+    def _resolve_phase (self, phase: str) -> str:
         if phase =="Uniform Pricing":
-            return Phase.UNIFORM_PRICING
+            return "uniform"
         elif phase == "Behavior Based Pricing":
-            return Phase.BBP_PRICING
+            return "bbp"
         
         else:
             raise ValueError
         
-    def _resolve_opp_type (self, opp_type: str)->OpponentType:
+    def _resolve_opp_type (self, opp_type: str)->str:
 
         if opp_type == "Uniform Pricing Opponent":
-            return OpponentType.UNIFORM
+            return "uniform"
         
         elif opp_type == "BBP Opponent":
-            return OpponentType.BBP
+            return "bbp"
         
         else :
             raise ValueError

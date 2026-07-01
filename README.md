@@ -37,7 +37,6 @@ Note that StableBaselines is for multi-agent environments, which this project do
 ## Installation
 
 ```bash
-cd "/home/mamasi/Desktop/article/Dynamic Pricing/bbp"
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip

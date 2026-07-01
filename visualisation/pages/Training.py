@@ -26,7 +26,7 @@ opp_type = st.sidebar.radio(
 
 run = 1
 path_resolver = PathResolver()
-path = "experiments/pricing/train/runs/1"
+path = path_resolver.resolve_train_path(training_phase, opp_type, run)
 
 data = load_data(f"{path}/metrics_final.json")
 
@@ -375,18 +375,39 @@ with tab1:
 
         )
         st.plotly_chart(fig)
-    
+
+    if training_phase == "Uniform Pricing":
+        if opp_type == "BBP Opponent":
+            price_traces = (
+                ('episode_uniform_prices', 'Agent Uniform', colors['harsh_teal'], 'solid'),
+                ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'dot'),
+                ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'dot'),
+            )
+        else :
+            price_traces = (
+                ('episode_uniform_prices', 'Agent Uniform', colors['harsh_teal'], 'solid'),
+                ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'dot'),
+                )
+
+    else :
+        if opp_type == "BBP Opponent":
+
+            price_traces = (
+                ('episode_new_prices', 'Agent BBP New', colors['harsh_blue'], 'solid'),
+                ('episode_old_prices', 'Agent BBP Old', colors['harsh_purple'], 'solid'),
+                ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'dot'),
+                ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'dot'),
+            )
+        else:
+            price_traces = (
+                ('episode_new_prices', 'Agent BBP New', colors['harsh_blue'], 'solid'),
+                ('episode_old_prices', 'Agent BBP Old', colors['harsh_purple'], 'solid'),
+                ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'dot'),
+            )
+
     with col2:
         st.markdown("#### Price Competition")
         fig = go.Figure()
-        price_traces = (
-            ('episode_uniform_prices', 'Agent Uniform', colors['harsh_teal'], 'solid'),
-            ('episode_new_prices', 'Agent BBP New', colors['harsh_blue'], 'solid'),
-            ('episode_old_prices', 'Agent BBP Old', colors['harsh_purple'], 'solid'),
-            ('episode_opponent_prices_uniform', 'Opponent Uniform', colors['harsh_pink'], 'dot'),
-            ('episode_opponent_prices_new', 'Opponent BBP New', colors['harsh_blue'], 'dot'),
-            ('episode_opponent_prices_old', 'Opponent BBP Old', colors['harsh_purple'], 'dot'),
-        )
         for key, name, color, dash in price_traces:
             fig.add_trace(go.Scatter(
                 x=df_metrics['episode'],
