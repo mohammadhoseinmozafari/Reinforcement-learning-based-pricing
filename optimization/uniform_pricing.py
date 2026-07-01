@@ -5,7 +5,7 @@ from typing import Any, Dict
 import numpy as np
 from config.constants import EPISODE_LENGTH
 from env.uniform_pricing_env import make_uniform_pricing_env
-from train.uniform_training.uniform_training import TrainingConfig
+from train.config import TrainingConfig
 price_bounds = {
     "aggressive_uniform": {
         "min" : 0.5,
@@ -132,4 +132,3 @@ def grid_search(opponent_type: str, step: float) -> Dict[str, Any]:
         json.dump(metrics_dict, f, indent=2)
    
     return metrics_dict
-

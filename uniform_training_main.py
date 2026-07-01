@@ -1,52 +1,41 @@
-import numpy as np
-from train.curriculum import CurriculumConfig
-from train.uniform_training.curriculum import UniformPricingCurriculum
-from train.uniform_training.uniform_curriculum_training import train_with_curriculum
-from train.uniform_training.uniform_training import TrainingConfig, plot_training_results, train_uniform_pricing, plot_training_results
-# =============================================================================
-# MAIN
-# =============================================================================
+"""Train a uniform-pricing SAC agent against uniform-price opponents."""
 
-def main():
-    """Run Phase 2.1 training."""
-    # Create configuration
+import numpy as np
+
+from env import EnvironmentType
+from train.config import TrainingConfig
+from train.curriculum import CurriculumConfig
+from train.pricing.curriculum import PricingCurriculum
+from train.trainer import CurriculumTrainer
+
+
+def main() -> None:
+    """Run the uniform-opponent curriculum and print final summary metrics."""
     config = TrainingConfig(
-        num_episodes= 1000,
+        environment_type=EnvironmentType.UNIFORM_PRICING,
+        num_episodes=1000,
         warmup_steps=500,
         eval_freq=10,
         save_freq=100,
+        save_dir="experiments/uniform_pricing/uniform_opp/runs/1",
     )
-    curriculum = UniformPricingCurriculum()
+    curriculum = PricingCurriculum()
+    curriculum.opponent_sequence = [
+        stage for stage in curriculum.get_sequence()
+        if stage.opponent_type.endswith("_uniform")
+    ]
+    curriculum_config = CurriculumConfig(
+        curriculum=curriculum,
+        stages=curriculum.opponent_sequence,
+        window_size=20,
+        change_threshold=0.04,
+        min_episodes_per_stage=100,
+        max_episodes_per_stage=250,
+    )
 
-    curr_config = CurriculumConfig(
-    curriculum=curriculum,
-    stages=curriculum.opponent_sequence,
-    window_size=20,
-    change_threshold=0.04,
-    min_episodes_per_stage=100,
-    max_episodes_per_stage=250
-    
-)
-    
-    # Train agent
-    agent, metrics = train_with_curriculum(config=config, curriculum_config=curr_config, verbose=True)
+    _, metrics = CurriculumTrainer(config, curriculum_config).train()
+    print("\nTraining complete")
 
-    
-    # Plot results
-    print("\n" + "=" * 60)
-    print("TRAINING COMPLETE")
-    print("=" * 60)
-    
-    # Final statistics
-    print(f"\nFinal 50 episodes:")
-    print(f"  Avg Reward: {np.mean(metrics.episode_rewards[-50:]):.2f}")
-    print(f"  Avg Price: {np.mean(metrics.episode_prices[-50:]):.2f}")
-    print(f"  Avg Market Share: {np.mean(metrics.episode_market_shares[-50:]):.2f}")
-    
-    # Plot
-    plot_training_results(metrics, config)
-    
-    print(f"\nResults saved to: {config.save_dir}")
 
 
 if __name__ == "__main__":
