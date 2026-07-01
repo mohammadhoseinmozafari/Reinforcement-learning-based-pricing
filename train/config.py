@@ -11,7 +11,7 @@ from train.curriculum import Curriculum, OpponentStage
 class TrainingConfig:
     """Configuration for Uniform Pricing training."""
     # Environment
-    environment_type  = EnvironmentType.UNIFORM_PRICING
+    environment_type: EnvironmentType = EnvironmentType.UNIFORM_PRICING
     num_consumers: int = NUM_CONSUMERS
     episode_length: int = EPISODE_LENGTH
     opponent_type: str = "random_reactive_uniform"
@@ -51,4 +51,3 @@ class TrainingConfig:
     verbose : bool = True
     # Paths
     save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"
-

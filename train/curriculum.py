@@ -61,7 +61,7 @@ class CurriculumConfig:
     curriculum : Curriculum
     # Curriculum stages
     stages: List[OpponentStage] = field(default_factory=list)
-    environment_type = EnvironmentType
+    environment_type: EnvironmentType = EnvironmentType.UNIFORM_PRICING
 
     # Loss stabilization detection
     window_size : int = 30
@@ -298,7 +298,7 @@ class OpponentCurriculumScheduler:
         
         # Create environment with current opponent
         env = make_pricing_env(
-            agent_config= self.config.environment_type,
+            environment_type=self.config.environment_type,
             opponent=self.current_stage.opponent_type,
             num_consumers=self.config.num_consumers,
             episode_length=self.config.episode_length,

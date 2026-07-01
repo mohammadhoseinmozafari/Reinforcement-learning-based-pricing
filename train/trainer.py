@@ -47,7 +47,11 @@ class CurriculumTrainer :
             replay_buffer= replay_buffer,
             target_entropy=self.config.target_entropy,
             log_std_min=self.config.log_std_min,
-            log_std_max=self.config.log_std_max
+            log_std_max=self.config.log_std_max,
+            batch_size=self.config.batch_size,
+            lr_scheduler=self.config.lr_scheduler,
+            lr_scheduler_kwargs=self.config.lr_scheduler_kwargs,
+            device=self.config.device,
         )
 
         return agent
@@ -230,5 +234,3 @@ class CurriculumTrainer :
         
             env.close()
             return agent, metrics
-
-

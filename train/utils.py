@@ -3,6 +3,9 @@ from models.sac import SAC
 from typing import Tuple, Dict , Any  
 import os 
 import json
+import numpy as np
+from dataclasses import asdict
+from enum import Enum
 from train.config import TrainingConfig
 from train.metrics  import TrainingMetrics
 def evaluate_agent(
@@ -23,28 +26,32 @@ def evaluate_agent(
     Returns:
         Average reward
     """
-    total_reward = 0
+    if num_episodes <= 0:
+        raise ValueError("num_episodes must be positive")
+
+    total_reward = 0.0
+    mean_values = []
+    std_values = []
+    raw_log_std_values = []
+    log_std_values = []
+    actions_taken = []
     
     for _ in range(num_episodes):
         state, _ = env.reset()
         episode_reward = 0
-        mean_values = []
-        std_values = []
-        raw_log_std_values= []
-        log_std_values = []
-        actions_taken = []
-
         for _ in range(max_steps):
             
             stats = agent.get_policy_stats(state)
-            mean_values.append(float(stats["mean"][0]))
-            std_values.append(float(stats["std"][0]))
-            raw_log_std_values.append(float(stats['raw_log_std'][0]))
-            log_std_values.append(float(stats["log_std"][0]))
+            mean_values.extend(np.asarray(stats["mean"], dtype=float).ravel())
+            std_values.extend(np.asarray(stats["std"], dtype=float).ravel())
+            raw_log_std_values.extend(
+                np.asarray(stats["raw_log_std"], dtype=float).ravel()
+            )
+            log_std_values.extend(np.asarray(stats["log_std"], dtype=float).ravel())
 
             action = agent.select_action(state, deterministic=True)
             
-            actions_taken.append(float(action[0]))
+            actions_taken.extend(np.asarray(action, dtype=float).ravel())
             next_state, reward, terminated, truncated, _ = env.step(action)
             episode_reward += float(reward)
             state = next_state
@@ -55,11 +62,11 @@ def evaluate_agent(
         total_reward += episode_reward
     
     policy_stats ={
-        "mean" : np.mean(mean_values),
-        "raw_log_std" : np.mean(raw_log_std_values),
-        "log_std" : np.mean(log_std_values),
-        "std" : np.mean(std_values),
-        "action" : np.mean(actions_taken)    
+        "mean": float(np.mean(mean_values)),
+        "raw_log_std": float(np.mean(raw_log_std_values)),
+        "log_std": float(np.mean(log_std_values)),
+        "std": float(np.mean(std_values)),
+        "action": float(np.mean(actions_taken)),
         }
         
     return total_reward / num_episodes, policy_stats
@@ -110,8 +117,11 @@ def save_checkpoint(
     
     # Save config
     config_path = os.path.join(config.save_dir, "config.json")
+    config_dict = asdict(config)
+    config_dict = {
+        key: value.value if isinstance(value, Enum) else value
+        for key, value in config_dict.items()
+    }
     with open(config_path, 'w') as f:
-        json.dump(vars(config), f, indent=2)
-
-
+        json.dump(config_dict, f, indent=2)
 

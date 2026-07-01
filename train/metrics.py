@@ -12,7 +12,10 @@ class TrainingMetrics:
     episode_profits: List[float] = field(default_factory=list)
     episode_opp_profits: List[float] = field(default_factory=list)
 
-    episode_prices: List[float] = field(default_factory=list)
+    episode_uniform_prices: List[float] = field(default_factory=list)
+    episode_new_prices: List[float] = field(default_factory=list)
+    episode_old_prices: List[float] = field(default_factory=list)
+
     episode_opp_uniform_prices: List[float] = field(default_factory=list)
     episode_opp_new_prices: List[float] = field(default_factory=list)
     episode_opp_old_prices: List[float] = field(default_factory=list)
@@ -43,7 +46,11 @@ class TrainingMetrics:
     def reset_episode(self):
         """Reset per-episode tracking."""
         self.step_profits = []
-        self.step_prices = []
+        
+        self.step_uniform_prices = []
+        self.step_new_prices = []
+        self.step_old_prices = []        
+        
         self.step_market_shares = []
         
 
@@ -62,7 +69,11 @@ class TrainingMetrics:
         self.step_profits.append(info.get("profit", 0.0))
         self.step_opp_profits.append(info.get("opponent_profit", 0.0))
 
-        self.step_prices.append(info.get("price", 0.0))
+        # UniformPricingEnv uses ``price``; PricingEnv exposes all three prices.
+        self.step_uniform_prices.append(info.get("uniform_price", 0.0))
+        self.step_new_prices.append(info.get("bbp_price_new", 0.0))
+        self.step_old_prices.append(info.get("bbp_price_old", 0.0))
+
         self.step_opp_uniform_prices.append(info.get("opponent_price_uniform", 0.0))
         self.step_opp_new_prices.append(info.get("opponent_price_new", 0.0))
         self.step_opp_old_prices.append(info.get("opponent_price_old", 0.0))
@@ -79,7 +90,11 @@ class TrainingMetrics:
         """Finalize episode metrics."""
         self.episode_rewards.append(total_reward)
         self.episode_profits.append(sum(self.step_profits))
-        self.episode_prices.append(float(np.mean(self.step_prices)) if self.step_prices else 0.0)
+
+        self.episode_uniform_prices.append(float(np.mean(self.step_uniform_prices)) if self.step_uniform_prices else 0.0)
+        self.episode_new_prices.append(float(np.mean(self.step_new_prices)) if self.step_new_prices else 0.0)
+        self.episode_old_prices.append(float(np.mean(self.step_old_prices)) if self.step_old_prices else 0.0)
+
         self.episode_market_shares.append(float(np.mean(self.step_market_shares)) if self.step_market_shares else 0.0)
         
 
