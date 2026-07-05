@@ -95,10 +95,11 @@ class PricingEnv(gym.Env):
         # ACTION SPACE: Flattened price (uniform_price , price_new , price_old)
         # =====================================
         # Action is normalized to [-1, 1], scaled to price range internally
+        action_dim = 3
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(3,),
+            shape=(action_dim,),
             dtype=np.float32
         )
 
