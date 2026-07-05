@@ -718,26 +718,39 @@ OPPONENT_PRESETS = {
         "step_range" :(0,0.5),
     },
 
-    
-    "reactive_bbp": {
-        "policy_type": "rule_based",
-        "base_uniform_price": 2.5,
-        "base_price_new": 1.8,
-        "base_price_old": 3.2,
-        "regime": 1,
-        "market_share_sensitivity": 0.3,
-        "price_step": 0.1,
+     "premium_random_reactive_bbp":{
+        "policy_type" : "randomized_rule_based",
+        "base_uniform_range" :(3.5, 5.0),
+        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
+        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
+        "regime":1,
+        "sensitivity_range" :(0.0, 0.3),
+        "step_range" :(0,0.5),
     },
-    
-    "price_matcher": {
-        "policy_type": "rule_based",
-        "base_uniform_price": 2.5,
-        "base_price_new": 2.0,
-        "base_price_old": 3.0,
-        "regime": 0,
-        "enable_price_matching": True,
-        "price_matching_offset": -0.1,
+
+    "passive_random_reactive_bbp":{
+        "policy_type" : "randomized_rule_based",
+        "base_uniform_range" :(2.0, 3.5),
+        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
+        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
+        "regime":1,
+        "sensitivity_range" :(0.3, 0.6),
+        "step_range" :(0,0.5),
     },
+
+    
+    "aggressive_random_reactive_bbp":{
+        "policy_type" : "randomized_rule_based",
+        "base_uniform_range" :(0.5, 2.0),
+        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
+        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
+        "regime":1,
+        "sensitivity_range" :(0.6 ,1.0),
+        "step_range" :(0,0.5),
+    },
+
+    
+
 }
 
 
