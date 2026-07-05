@@ -1,235 +1,273 @@
+"""Interactive Streamlit game: a human prices against a trained SAC agent."""
+
 import sys
 from pathlib import Path
-import time
+
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from env.models import HotellingMarket
+from config.constants import (
+    PRICE_BBP_NEW_MAX,
+    PRICE_BBP_NEW_MIN,
+    PRICE_BBP_OLD_MAX,
+    PRICE_BBP_OLD_MIN,
+    PRICE_UNIFORM_MAX,
+    PRICE_UNIFORM_MIN,
+)
+from visualisation.utils.simulation_game import SimulationGame, create_game
+from visualisation.utils.styles import apply_styles, colors, metric_card
 
 
-# Page config
-st.set_page_config(
-    page_title="Market Simulation",
-    page_icon="📊",
-    layout="wide"
+st.set_page_config(page_title="Play Against the Agent", page_icon="🎮", layout="wide")
+apply_styles()
+
+STRATEGY_LABELS = {
+    "uniform": "Uniform Pricing",
+    "bbp": "Behavior-Based Pricing",
+}
+GAME_KEY = "human_vs_agent_game"
+
+
+def chart_layout(fig: go.Figure, y_title: str) -> go.Figure:
+    """Apply the same clean Plotly layout used by the other dashboards."""
+    fig.update_layout(
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=350,
+        margin=dict(l=0, r=0, t=8, b=0),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=12),
+        ),
+        xaxis=dict(title="Step", showgrid=False, zeroline=False),
+        yaxis=dict(title=y_title, showgrid=True, gridcolor="#E5E5EA", zeroline=False),
+        hovermode="x unified",
+    )
+    return fig
+
+
+def line_chart(data: pd.DataFrame, series: list[tuple[str, str, str, str]], y_title: str) -> go.Figure:
+    fig = go.Figure()
+    for column, label, color, dash in series:
+        fig.add_trace(go.Scatter(
+            x=data["step"],
+            y=data[column],
+            name=label,
+            mode="lines+markers",
+            line=dict(color=color, width=2.5, dash=dash),
+            marker=dict(size=5),
+        ))
+    return chart_layout(fig, y_title)
+
+
+def price_series(game: SimulationGame) -> list[tuple[str, str, str, str]]:
+    series: list[tuple[str, str, str, str]] = []
+    if game.human_strategy == "uniform":
+        series.append(("user_uniform_price", "Your Uniform Price", colors["harsh_teal"], "solid"))
+    else:
+        series.extend([
+            ("user_new_price", "Your New-Customer Price", colors["harsh_teal"], "solid"),
+            ("user_old_price", "Your Returning-Customer Price", colors["harsh_blue"], "solid"),
+        ])
+    if game.agent_strategy == "uniform":
+        series.append(("agent_uniform_price", "Agent Uniform Price", colors["harsh_pink"], "dot"))
+    else:
+        series.extend([
+            ("agent_new_price", "Agent New-Customer Price", colors["harsh_pink"], "dot"),
+            ("agent_old_price", "Agent Returning-Customer Price", colors["harsh_purple"], "dot"),
+        ])
+    return series
+
+
+with st.sidebar:
+    st.markdown("### Game Setup")
+    agent_strategy = st.radio(
+        "Agent pricing strategy",
+        options=list(STRATEGY_LABELS),
+        format_func=STRATEGY_LABELS.get,
+        horizontal=False,
+    )
+    human_strategy = st.radio(
+        "Your pricing strategy",
+        options=list(STRATEGY_LABELS),
+        format_func=STRATEGY_LABELS.get,
+        horizontal=False,
+    )
+    st.caption(
+        f"Loads `experiments/{agent_strategy}_vs_{human_strategy}/runs/1/`"
+    )
+    start_game = st.button("Start / Restart Episode", type="primary", width="stretch")
+
+
+if start_game:
+    old_game = st.session_state.get(GAME_KEY)
+    if old_game is not None:
+        old_game.env.close()
+    try:
+        with st.spinner("Loading trained agent and starting the market..."):
+            st.session_state[GAME_KEY] = create_game(
+                PROJECT_ROOT, agent_strategy, human_strategy
+            )
+    except (FileNotFoundError, ValueError, KeyError) as exc:
+        st.session_state.pop(GAME_KEY, None)
+        st.error(str(exc))
+
+
+st.markdown('<div class="hero-title">Play Against the Pricing Agent</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="hero-subtitle">Post a price, let the trained agent respond, and compete for the market.</div>',
+    unsafe_allow_html=True,
+)
+st.markdown('<div class="apple-divider"></div>', unsafe_allow_html=True)
+
+game: SimulationGame | None = st.session_state.get(GAME_KEY)
+if game is None:
+    st.info("Choose both pricing strategies in the sidebar, then start an episode.")
+    st.stop()
+
+selection_changed = (
+    game.agent_strategy != agent_strategy or game.human_strategy != human_strategy
+)
+if selection_changed:
+    st.warning("The strategy selection changed. Start a new episode to load the matching agent.")
+
+setup_cols = st.columns(3)
+setup_cols[0].markdown(metric_card("Trained Agent", STRATEGY_LABELS[game.agent_strategy]), unsafe_allow_html=True)
+setup_cols[1].markdown(metric_card("Your Strategy", STRATEGY_LABELS[game.human_strategy]), unsafe_allow_html=True)
+setup_cols[2].markdown(
+    metric_card("Episode Progress", f"{game.step_number} / {game.episode_length}"),
+    unsafe_allow_html=True,
 )
 
-# Custom CSS for styling
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, #3F9AAE, #F96E5B);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        padding: 1rem 0;
-    }
-    .chart-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #444;
-        margin-bottom: 0.5rem;
-    }
-    .stMetric {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-    }
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .firm-a-color { color: #3F9AAE; font-weight: 600; }
-    .firm-b-color { color: #F96E5B; font-weight: 600; }
-</style>
-""", unsafe_allow_html=True)
-
-def moving_average(series, window_size=10):
-    return series.rolling(window=window_size).mean()
-
-def create_pricing_inputs(column, firm_name, regime, color_class, default_uniform=2.0, default_new=1.5, default_old=2.5):
-    """Create pricing input widgets based on regime selection."""
-    if regime == 0:  # Uniform Pricing
-        return {
-            'uniform_price': column.number_input(
-                label=f"💰 {firm_name} Uniform Price",
-                min_value=0.0,
-                value=default_uniform,
+control_col, response_col = st.columns([1, 1])
+with control_col:
+    st.markdown("### Post Your Price")
+    with st.form("human_price_form", clear_on_submit=False):
+        if game.human_strategy == "uniform":
+            uniform_price = st.number_input(
+                "Uniform price",
+                min_value=float(PRICE_UNIFORM_MIN),
+                max_value=float(PRICE_UNIFORM_MAX),
+                value=2.5,
                 step=0.1,
-                help=f"Set the uniform price for {firm_name}"
-            ),
-            'price_new': None,
-            'price_old': None
-        }
-    else:  # Behavior-Based Pricing
-        return {
-            'uniform_price': None,
-            'price_new': column.number_input(
-                label=f"🆕 {firm_name} New Customer Price",
-                min_value=0.0,
-                value=default_new,
-                step=0.1,
-                help=f"Set the price for new customers for {firm_name}"
-            ),
-            'price_old': column.number_input(
-                label=f"🔄 {firm_name} Returning Customer Price",
-                min_value=0.0,
-                value=default_old,
-                step=0.1,
-                help=f"Set the price for returning customers for {firm_name}"
             )
-        }
+            price_new, price_old = 2.0, 3.0
+        else:
+            uniform_price = 2.5
+            price_new = st.number_input(
+                "New-customer price",
+                min_value=float(PRICE_BBP_NEW_MIN),
+                max_value=float(PRICE_BBP_NEW_MAX),
+                value=2.0,
+                step=0.1,
+            )
+            price_old = st.number_input(
+                "Returning-customer price",
+                min_value=max(float(PRICE_BBP_OLD_MIN), float(price_new)),
+                max_value=float(PRICE_BBP_OLD_MAX),
+                value=max(3.0, float(price_new)),
+                step=0.1,
+            )
+        submitted = st.form_submit_button(
+            "Post Price and Play Step",
+            type="primary",
+            width="stretch",
+            disabled=game.finished or selection_changed,
+        )
 
-# Configuration
-REGIME_OPTIONS = {
-    0: "Uniform Pricing",
-    1: "Behavior-Based Pricing"
-}
+    if submitted:
+        try:
+            game.step(float(uniform_price), float(price_new), float(price_old))
+        except (RuntimeError, ValueError) as exc:
+            st.error(str(exc))
+        else:
+            st.rerun()
 
-# Colors
-FIRM_A_COLOR = '#3F9AAE'
-FIRM_B_COLOR = '#F96E5B'
+with response_col:
+    st.markdown("### Latest Market Response")
+    if not game.history:
+        st.caption("The agent response and market result will appear after your first posted price.")
+    else:
+        latest = game.history[-1]
+        if game.agent_strategy == "uniform":
+            agent_price_text = f"{latest['agent_uniform_price']:.2f}"
+        else:
+            agent_price_text = f"{latest['agent_new_price']:.2f} / {latest['agent_old_price']:.2f}"
+        response_metrics = st.columns(2)
+        response_metrics[0].metric("Agent posted price", agent_price_text)
+        response_metrics[1].metric("Your market share", f"{latest['user_market_share']:.1%}")
+        response_metrics[0].metric("Your period profit", f"{latest['user_profit']:.2f}")
+        response_metrics[1].metric("Agent period profit", f"{latest['agent_profit']:.2f}")
 
-# Main UI
-st.markdown('<h1 class="main-header">Live Market Simulation</h1>', unsafe_allow_html=True)
-st.markdown("---")
+if game.finished:
+    user_total = game.history[-1]["user_cumulative_profit"]
+    agent_total = game.history[-1]["agent_cumulative_profit"]
+    if user_total > agent_total:
+        st.success(f"Episode complete — you won by {user_total - agent_total:.2f} profit units.")
+    elif user_total < agent_total:
+        st.warning(f"Episode complete — the agent won by {agent_total - user_total:.2f} profit units.")
+    else:
+        st.info("Episode complete — the market ended in a tie.")
 
-# Settings in sidebar for cleaner look
-with st.sidebar:
-    st.markdown("## ⚙️ Experiment Settings")
-    
-    st.markdown("### 🏢 Firm A")
-    regime_a = st.segmented_control(
-        label="Pricing Strategy",
-        options=REGIME_OPTIONS.keys(),
-        default=0,
-        format_func=lambda x: REGIME_OPTIONS[x],
-        selection_mode="single",
-        key="regime_a"
-    ) or 0
-    prices_a = create_pricing_inputs(st, "Firm A", regime_a, "firm-a-color")
-    
-    st.markdown("---")
-    
-    st.markdown("### 🏭 Firm B")
-    regime_b = st.segmented_control(
-        label="Pricing Strategy",
-        options=REGIME_OPTIONS.keys(),
-        default=0,
-        format_func=lambda x: REGIME_OPTIONS[x],
-        selection_mode="single",
-        key="regime_b"
-    ) or 0
-    prices_b = create_pricing_inputs(st, "Firm B", regime_b, "firm-b-color")
-    
-    st.markdown("---")
-    
-    st.markdown("### 🎯 Market Parameters")
-    n_consumers = st.number_input(
-        label="👥 Number of Consumers",
-        min_value=1,
-        value=1000,
-        step=10,
-        help="Total consumers in the market"
-    )
-    
-    exclusivity = st.slider(
-        label="✨ Exclusivity Seekness", 
-        min_value=0.0,
-        max_value=1.0,
-        value=0.5,
-        step=0.1,
-        help="Mean of the exclusivity distribution"
-    )
-    
-    strategicness = st.slider(
-        label="🧠 Strategicness", 
-        min_value=0.0,
-        max_value=1.0,
-        value=0.5,
-        step=0.1,
-        help="Mean of the strategicness distribution"
-    )
+if game.history:
+    frame = pd.DataFrame(game.history)
+    st.markdown('<div class="apple-divider"></div>', unsafe_allow_html=True)
+    tab_market, tab_prices, tab_data = st.tabs(["Market Results", "Pricing", "Step Data"])
 
-# Initialize market
-market = HotellingMarket(n_consumers, 42, exclusivity, strategicness)
-market.set_regimes(regime_a, regime_b)
+    with tab_market:
+        left, right = st.columns(2)
+        with left:
+            st.markdown("#### Period Profit")
+            st.plotly_chart(line_chart(frame, [
+                ("user_profit", "Your Profit", colors["harsh_teal"], "solid"),
+                ("agent_profit", "Agent Profit", colors["harsh_pink"], "solid"),
+            ], "Profit"), width="stretch")
+            st.markdown("#### Market Share")
+            share_frame = frame.copy()
+            share_frame["user_market_share"] *= 100
+            share_frame["agent_market_share"] *= 100
+            st.plotly_chart(line_chart(share_frame, [
+                ("user_market_share", "Your Market Share", colors["harsh_teal"], "solid"),
+                ("agent_market_share", "Agent Market Share", colors["harsh_pink"], "solid"),
+            ], "Market Share (%)"), width="stretch")
+        with right:
+            st.markdown("#### Cumulative Profit")
+            st.plotly_chart(line_chart(frame, [
+                ("user_cumulative_profit", "Your Cumulative Profit", colors["harsh_teal"], "solid"),
+                ("agent_cumulative_profit", "Agent Cumulative Profit", colors["harsh_pink"], "solid"),
+            ], "Cumulative Profit"), width="stretch")
+            st.markdown("#### Profit Advantage")
+            gap_frame = frame.copy()
+            gap_frame["profit_gap"] = (
+                gap_frame["user_cumulative_profit"] - gap_frame["agent_cumulative_profit"]
+            )
+            gap_figure = line_chart(gap_frame, [
+                ("profit_gap", "Your Advantage", colors["harsh_purple"], "solid"),
+            ], "Cumulative Profit Gap")
+            gap_figure.add_hline(y=0, line_dash="dash", line_color=colors["harsh_gray"])
+            st.plotly_chart(gap_figure, width="stretch")
 
-# Metrics row
-st.markdown("### 📈 Real-Time Metrics")
-metric_cols = st.columns(4)
-metric_a_share = metric_cols[0].empty()
-metric_b_share = metric_cols[1].empty()
-metric_a_profit = metric_cols[2].empty()
-metric_b_profit = metric_cols[3].empty()
+    with tab_prices:
+        st.markdown("#### Posted Prices")
+        st.plotly_chart(
+            line_chart(frame, price_series(game), "Price"),
+            width="stretch",
+        )
 
-# Chart layout
-st.markdown("---")
-chart_col1, chart_col2 = st.columns(2)
-
-with chart_col1:
-    st.markdown("#### 📊 Market Share")
-    market_share_data = pd.DataFrame({"Firm A": [], "Firm B": []})
-    chart_share = st.line_chart(market_share_data, color=[FIRM_A_COLOR, FIRM_B_COLOR], height=250)
-    
-    st.markdown("#### 💵 Period Profits")
-    profit_data = pd.DataFrame({"Firm A": [], "Firm B": []})
-    chart_profit = st.line_chart(profit_data, color=[FIRM_A_COLOR, FIRM_B_COLOR], height=250)
-
-with chart_col2:
-    st.markdown("#### 📉 Market Share (Moving Avg)")
-    moving_avg_data = pd.DataFrame({"Firm A": [], "Firm B": []})
-    chart_avg = st.line_chart(moving_avg_data, color=[FIRM_A_COLOR, FIRM_B_COLOR], height=250)
-    
-    st.markdown("#### 💰 Cumulative Profits")
-    cumulative_data = pd.DataFrame({"Firm A": [], "Firm B": []})
-    chart_cumulative = st.line_chart(cumulative_data, color=[FIRM_A_COLOR, FIRM_B_COLOR], height=250)
-
-
-# Run simulation
-for step in range(100):
-    market.step(prices_a, prices_b)
-    
-    # Calculate values
-    firm_a_avg = moving_average(pd.Series(market.firms[0].market_share_history))
-    firm_b_avg = moving_average(pd.Series(market.firms[1].market_share_history))
-    firm_a_state,firm_b_state = market.get_firm_state(0), market.get_firm_state(1)
-    firm_a_share , firm_b_share =firm_a_state["market_share"], firm_b_state["market_share"]
-    firm_a_popularity_change, firm_b_popularity_change = firm_a_state["popularity_change"], firm_b_state["popularity_change"]
-    firm_a_retention_rate, firm_b_retention_rate = firm_a_state["retention_rate"], firm_b_state["retention_rate"]
-    firm_a_relative_popularity, firm_b_relative_popularity = firm_a_state["relative_popularity"], firm_b_state["relative_popularity"]
-    firm_a_new_old_ratio, firm_b_new_old_ratio = firm_a_state["new_old_ratio"], firm_b_state["new_old_ratio"]
-    firm_a_last_demand, firm_b_last_demand = firm_a_state["last_demand"], firm_b_state["last_demand"]
-    firm_a_period_profit, firm_b_period_profit = firm_a_state["period_profit"], firm_b_state["period_profit"]
-    firm_a_cumulative_profit, firm_b_cumulative_profit = firm_a_state["cumulative_profit"], firm_b_state["cumulative_profit"]
-    firm_a_demand_new, firm_b_demand_new = firm_a_state["demand_new"], firm_b_state["demand_new"]
-    firm_a_demand_old, firm_b_demand_old = firm_a_state["demand_old"], firm_b_state["demand_old"]
-
-    
-    # Update metrics
-    metric_a_share.metric("🏢 Firm A Share", f"{firm_a_share:.1%}", 
-                          delta=f"{firm_a_share - 0.5:+.1%}" if step > 0 else None)
-    metric_b_share.metric("🏭 Firm B Share", f"{firm_b_share:.1%}",
-                          delta=f"{firm_b_share - 0.5:+.1%}" if step > 0 else None)
-    metric_a_profit.metric("💵 Firm A Profit", f"${firm_a_period_profit:,.0f}")
-    metric_b_profit.metric("💰 Firm B Profit", f"${firm_b_period_profit:,.0f}")
-    
-    # Update charts
-    chart_share.add_rows(pd.DataFrame({"Firm A": [firm_a_share], "Firm B": [firm_b_share]}))
-    chart_avg.add_rows(pd.DataFrame({"Firm A": [firm_a_avg.iloc[-1]], "Firm B": [firm_b_avg.iloc[-1]]}))
-    chart_profit.add_rows(pd.DataFrame({"Firm A": [firm_a_period_profit], "Firm B": [firm_b_period_profit]}))
-    chart_cumulative.add_rows(pd.DataFrame({"Firm A": [firm_a_cumulative_profit], "Firm B": [firm_b_cumulative_profit]}))
-    
-    # Update progress
-    
-    time.sleep(0.3)
-
-# Completion message
+    with tab_data:
+        st.dataframe(frame, width="stretch", hide_index=True)
+        st.download_button(
+            "Download Episode CSV",
+            data=frame.to_csv(index=False),
+            file_name=f"{game.agent_strategy}_vs_{game.human_strategy}_episode.csv",
+            mime="text/csv",
+        )
