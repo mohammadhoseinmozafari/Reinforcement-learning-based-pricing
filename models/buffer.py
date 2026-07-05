@@ -17,6 +17,7 @@ class BaseReplayBuffer(ABC):
     def __len__(self):
         raise NotImplementedError
 
+
 class ReplayBuffer(BaseReplayBuffer):
     def __init__(self, capacity: int) -> None:
         self.buffer = deque(maxlen=capacity)
@@ -262,3 +263,228 @@ class RecencyBiasReplayBuffer(BaseReplayBuffer):
 
     def __len__(self):
         return len(self.buffer)
+
+
+class EpisodeReplayBuffer:
+    def __init__(self, capacity_episodes: int, sequence_length: int) -> None:
+        self.episodes = deque(maxlen=capacity_episodes)
+        self.sequence_length = sequence_length
+
+    def push(self, episode) -> None:
+        """Store an episode in the buffer."""
+        if len(episode["obs"]) == 0:
+            return
+        self.episodes.append(episode)
+
+    def sample(self):
+        """Samples an episodes, masks the episodes which their length is below the sequence length"""
+
+        episode = random.choice(self.episodes)
+        episode_len = len(episode["obs"])
+        T = self.sequence_length
+
+        if episode_len >= T:
+            start = random.randint(0, episode_len - T)
+            end = start + T
+            mask = np.ones((T, 1), dtype=np.float32)
+
+            return {
+                "obs": episode["obs"][start:end],
+                "actions": episode["actions"][start:end],
+                "rewards": episode["rewards"][start:end],
+                "next_obs": episode["next_obs"][start:end],
+                "dones": episode["dones"][start:end],
+                "opponent_actions": episode["opponent_actions"][start:end],
+                "mask": mask,
+                "opponent_type": episode["opponent_type"],
+                "stage_id": episode["stage_id"],
+            }
+
+        pad = T - episode_len
+        mask = np.concatenate(
+            [
+                np.ones((episode_len, 1), dtype=np.float32),
+                np.zeros((pad, 1), dtype=np.float32),
+            ],
+            axis=0,
+        )
+
+        return {
+            "obs": self._pad(episode["obs"], T),
+            "actions": self._pad(episode["actions"], T),
+            "rewards": self._pad(episode["rewards"], T),
+            "next_obs": self._pad(episode["next_obs"], T),
+            "dones": self._pad(episode["dones"], T),
+            "opponent_actions": self._pad(episode["opponent_actions"], T),
+            "mask": mask,
+            "opponent_type": episode["opponent_type"],
+            "stage_id": episode["stage_id"],
+        }
+
+    def _pad(self, arr, target_len):
+        current_len = len(arr)
+        if current_len >= target_len:
+            return arr[:target_len]
+
+        pad_shape = (target_len - current_len,) + arr.shape[1:]
+        padding = np.zeros(pad_shape, dtype=np.float32)
+        return np.concatenate([arr, padding], axis=0)
+
+    def __len__(self):
+        return len(self.episodes)
+
+class CurriculumSequenceReplayBuffer:
+    """Curriculum-aware replay for fixed-length sequences sampled from episodes.
+
+    Its stage-management interface mirrors :class:`CurriculumReplayBuffer`,
+    while each per-stage buffer remains an :class:`EpisodeReplayBuffer`.
+    ``push`` therefore accepts a complete episode rather than one transition.
+    The active stage is authoritative: opponent and stage metadata are attached
+    automatically before the episode is stored.
+    """
+
+    def __init__(
+        self,
+        capacity: int,
+        batch_size: int,
+        curriculum: Curriculum,
+        sequence_length: int,
+        current_stage_weight: float = 0.75,
+    ) -> None:
+        if capacity <= 0:
+            raise ValueError("capacity must be positive")
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if sequence_length <= 0:
+            raise ValueError("sequence_length must be positive")
+        if not 0.0 < current_stage_weight <= 1.0:
+            raise ValueError("current_stage_weight must be in (0, 1]")
+
+        self.sequence_length = sequence_length
+        self.batch_size = batch_size
+        self.capacity = capacity
+        self.current_stage_weight = current_stage_weight
+
+        stages = curriculum.get_sequence()
+        if not stages:
+            raise ValueError("curriculum must contain at least one stage")
+
+        self.stage_ids = {
+            stage.opponent_type: index for index, stage in enumerate(stages)
+        }
+        if len(self.stage_ids) != len(stages):
+            raise ValueError("curriculum opponent types must be unique")
+
+        self.buffers = self._create_buffers(curriculum)
+        self.sampling_weights = self._create_sampling_weights(curriculum)
+        self.current_stage = stages[0].opponent_type
+        self.current_stage_id = 0
+
+    def _create_buffers(self, curriculum: Curriculum) -> Dict[str, EpisodeReplayBuffer]:
+        stages = curriculum.get_sequence()
+        buffers = {}
+        for stage in stages:
+            buffers[stage.opponent_type] = EpisodeReplayBuffer(
+                self.capacity,
+                self.sequence_length,
+            )
+        return buffers
+
+    def _create_sampling_weights(
+        self,
+        curriculum: Curriculum,
+    ) -> Dict[str, Dict[str, float]]:
+        """Match the current/prior-stage weighting of CurriculumReplayBuffer."""
+        stages = curriculum.get_sequence()
+        weights: Dict[str, Dict[str, float]] = {}
+        for current_index, current_stage in enumerate(stages):
+            current_name = current_stage.opponent_type
+            if current_index == 0:
+                weights[current_name] = {current_name: 1.0}
+                continue
+
+            stage_weights = {current_name: self.current_stage_weight}
+            previous_weight = (1.0 - self.current_stage_weight) / current_index
+            for previous_stage in stages[:current_index]:
+                stage_weights[previous_stage.opponent_type] = previous_weight
+            weights[current_name] = stage_weights
+        return weights
+
+    def set_stage(self, stage_name: str) -> None:
+        """Select the stage used for insertion and curriculum-weighted sampling."""
+        if stage_name not in self.buffers:
+            raise KeyError(f"Unknown curriculum stage: {stage_name}")
+        self.current_stage = stage_name
+        self.current_stage_id = self.stage_ids[stage_name]
+
+    def push(self, episode) -> None:
+        """Store a complete episode in the active stage buffer.
+
+        A shallow copy prevents curriculum metadata from mutating the caller's
+        episode dictionary. Array payloads are intentionally not copied.
+        """
+        staged_episode = dict(episode)
+        staged_episode["opponent_type"] = self.current_stage
+        staged_episode["stage_id"] = self.current_stage_id
+        self.buffers[self.current_stage].push(staged_episode)
+
+    def sample(self, batch_size=None):
+        """Sample and stack a batch of padded sequences across eligible stages."""
+        if batch_size is None:
+            batch_size = self.batch_size
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+        selected_opponents = self._sample_opponent_types(batch_size)
+        sequences = [
+            self.buffers[opponent_type].sample()
+            for opponent_type in selected_opponents
+        ]
+
+        return self._stack_sequences(sequences)
+
+    def _sample_opponent_types(self, batch_size):
+        configured_weights = self.sampling_weights[self.current_stage]
+        available = {
+            opponent_type: weight
+            for opponent_type, weight in configured_weights.items()
+            if len(self.buffers[opponent_type]) > 0 and weight > 0
+        }
+        if not available:
+            raise ValueError("No episodes available in replay buffer.")
+
+        opponents = list(available)
+        weights = list(available.values())
+        return random.choices(opponents, weights=weights, k=batch_size)
+
+    def _stack_sequences(self, sequences):
+        return {
+            "obs": np.stack([s["obs"] for s in sequences], axis=0),
+            "actions": np.stack([s["actions"] for s in sequences], axis=0),
+            "rewards": np.stack([s["rewards"] for s in sequences], axis=0),
+            "next_obs": np.stack([s["next_obs"] for s in sequences], axis=0),
+            "dones": np.stack([s["dones"] for s in sequences], axis=0),
+            "opponent_actions": np.stack(
+                [s["opponent_actions"] for s in sequences],
+                axis=0,
+            ),
+            "mask": np.stack([s["mask"] for s in sequences], axis=0),
+            "opponent_types": [s["opponent_type"] for s in sequences],
+            "stage_ids": np.asarray(
+                [s["stage_id"] for s in sequences],
+                dtype=np.int64,
+            ),
+        }
+
+    def __len__(self):
+        return sum(len(buffer) for buffer in self.buffers.values())
+
+    def stage_size(self, stage_name):
+        """Return the number of complete episodes stored for one stage."""
+        return len(self.buffers[stage_name])
+
+    def get_info(self):
+        return {
+            opponent_type: len(buffer)
+            for opponent_type, buffer in self.buffers.items()
+        }
