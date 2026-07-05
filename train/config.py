@@ -9,6 +9,7 @@ from env.type import EnvironmentType
 @dataclass
 class TrainingConfig:
     """Configuration for Uniform Pricing training."""
+    agent_type: str = "sac"
     # Environment
     environment_type: EnvironmentType = EnvironmentType.UNIFORM_PRICING
     num_consumers: int = NUM_CONSUMERS
@@ -34,6 +35,20 @@ class TrainingConfig:
     lr_scheduler : Optional[str] = None
     lr_scheduler_kwargs: Optional[Dict] = None
     device: Optional[str] = None
+
+    # Recurrent SAC (used only when agent_type == "recurrent_sac")
+    sequence_length: int = 16
+    episode_buffer_capacity: int = 1000
+    opponent_action_dim: int = 3
+    opponent_embedding_dim: int = 32
+    encoder_hidden_dim: int = 128
+    actor_hidden_dim: int = 128
+    critic_hidden_dim: int = 128
+    lr_encoder: float = 3e-4
+    opponent_aux_loss_weight: float = 1.0
+    grad_clip_norm: Optional[float] = 10.0
+    min_episodes_before_update: Optional[int] = None
+    current_stage_weight: float = 0.75
     # Training
     num_episodes: int = 1000
     warmup_steps: int = 1000

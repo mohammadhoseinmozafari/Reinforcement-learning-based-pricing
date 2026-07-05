@@ -1,0 +1,5 @@
+name: sac_uniform_vs_bbp
+agent_strategy: uniform_pricing
+training_config: ../training/sac.yaml
+curriculum_config: ../curricula/bbp.yaml
+save_dir: experiments/sac/uniform_vs_bbp/runs/1

@@ -1,0 +1,5 @@
+name: sac_uniform_vs_mixed
+agent_strategy: uniform_pricing
+training_config: ../training/sac.yaml
+curriculum_config: ../curricula/mixed.yaml
+save_dir: experiments/sac/uniform_vs_mixed/runs/1

@@ -1,0 +1,50 @@
+environment:
+  num_consumers: 50
+  episode_length: 100
+
+agent:
+  agent_type: recurrent_sac
+  lr_actor: 0.0005
+  lr_critic: 0.0005
+  lr_encoder: 0.0003
+  lr_alpha: 0.0001
+  target_entropy: -0.5
+  gamma: 0.9
+  tau: 0.005
+  auto_alpha: true
+  alpha: 1.0
+  log_std_min: -10.0
+  log_std_max: 0.1
+  buffer_size: 100000
+  batch_size: 32
+  device: null
+  lr_scheduler: null
+  lr_scheduler_kwargs: null
+  sequence_length: 16
+  episode_buffer_capacity: 1000
+  opponent_action_dim: 3
+  opponent_embedding_dim: 32
+  encoder_hidden_dim: 128
+  actor_hidden_dim: 128
+  critic_hidden_dim: 128
+  opponent_aux_loss_weight: 1.0
+  grad_clip_norm: 10.0
+  min_episodes_before_update: 64
+  current_stage_weight: 0.75
+
+training:
+  num_episodes: 1000
+  warmup_steps: 500
+  updates_per_step: 2
+
+evaluation:
+  eval_freq: 10
+  eval_episodes: 5
+
+logging:
+  log_freq: 1
+  save_freq: 100
+  verbose: true
+
+reproducibility:
+  seed: 42

@@ -3,6 +3,7 @@ environment:
   episode_length: 100
 
 agent:
+  agent_type: sac
   hidden_dim: 32
   lr_actor: 0.0005
   lr_critic: 0.0005

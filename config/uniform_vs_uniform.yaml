@@ -1,5 +1,0 @@
-name: uniform_vs_uniform
-agent_strategy: uniform_pricing
-training_config: training/default.yaml
-curriculum_config: curricula/uniform.yaml
-save_dir: experiments/uniform_vs_uniform/runs/1

@@ -55,8 +55,8 @@ class RecurrentCurriculumTrainer:
 
     @staticmethod
     def _normalize(value: float, minimum: float, maximum: float) -> float:
-        normalized = 2.0 * (float(value) - minimum) / (maximum - minimum) - 1.0
-        return float(np.clip(normalized, -1.0, 1.0))
+        normalized = (2.0 * (float(value) - minimum) / (maximum - minimum)) - 1.0
+        return float(normalized)
 
     def _extract_opponent_action(self, info: Dict) -> np.ndarray:
         """Extract opponent prices and normalize them to the agent action scale."""

@@ -1,0 +1,5 @@
+name: recurrent_sac_bbp_vs_uniform
+agent_strategy: bbp_pricing
+training_config: ../training/recurrent_sac.yaml
+curriculum_config: ../curricula/uniform.yaml
+save_dir: experiments/recurrent_sac/bbp_vs_uniform/runs/1

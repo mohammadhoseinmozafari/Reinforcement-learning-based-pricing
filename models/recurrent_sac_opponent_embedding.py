@@ -97,13 +97,13 @@ class RecurrentActor(nn.Module):
         self.log_std_min = log_std_min
         self.log_std_max = log_std_max
         self.gru = nn.GRU(obs_dim + opponent_embedding_dim, hidden_dim, batch_first=True)
-        self.head = nn.Sequential(
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-        )
+        # self.head = nn.Sequential(
+        #     nn.LayerNorm(hidden_dim),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.SiLU(),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.SiLU(),
+        # )
         self.mean_head = nn.Linear(hidden_dim, action_dim)
         self.log_std_head = nn.Linear(hidden_dim, action_dim)
 
@@ -122,7 +122,7 @@ class RecurrentActor(nn.Module):
 
         recurrent_output, next_hidden = self.gru(inputs, hidden)
         
-        recurrent_output = self.head(recurrent_output)
+        # recurrent_output = self.head(recurrent_output)
         
         mean = self.mean_head(recurrent_output)
         raw_log_std = self.log_std_head(recurrent_output)

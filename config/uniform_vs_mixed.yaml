@@ -1,5 +1,0 @@
-name: uniform_vs_mixed
-agent_strategy: uniform_pricing
-training_config: training/default.yaml
-curriculum_config: curricula/mixed.yaml
-save_dir: experiments/uniform_vs_mixed/runs/1

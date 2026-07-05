@@ -64,15 +64,27 @@ The landing page links to:
 All pricing experiments use the same YAML-driven entrypoint:
 
 ```bash
-python pricing_train.py --config config/uniform_vs_bbp.yaml
+python pricing_train.py --config config/sac/uniform_vs_bbp.yaml
 ```
 
 Available experiment files cover uniform and BBP agents against uniform, BBP,
 or mixed curricula. Useful one-off overrides do not require editing YAML:
 
 ```bash
-python pricing_train.py --config config/bbp_vs_mixed.yaml --episodes 50 --seed 7 --device cpu
+python pricing_train.py --config config/sac/bbp_vs_mixed.yaml --episodes 50 --seed 7 --device cpu
 ```
+
+The runner supports both agent implementations. `config/training/sac.yaml`
+selects feed-forward SAC, while `config/training/recurrent_sac.yaml` contains
+the recurrent SAC with opponent-embedding settings. For a one-off recurrent run:
+
+```bash
+python pricing_train.py --config config/recurrent_sac/uniform_vs_bbp.yaml
+```
+
+Recurrent SAC uses episodic sequence replay and `RecurrentCurriculumTrainer`;
+normal SAC uses transition replay and `CurriculumTrainer`. Use separate output
+directories so one implementation does not overwrite the other's checkpoints.
 
 Checkpoints and metrics are saved to the experiment's configured `save_dir`.
 
@@ -109,8 +121,10 @@ python opt_main.py
 
 Configuration is composed from three YAML layers:
 
-- `config/*_vs_*.yaml` selects the agent strategy, training profile, curriculum, and output path.
-- `config/training/default.yaml` contains shared environment, SAC, training, evaluation, and logging settings.
+- `config/sac/*_vs_*.yaml` defines feed-forward SAC experiments and outputs.
+- `config/recurrent_sac/*_vs_*.yaml` defines recurrent SAC experiments and outputs.
+- `config/training/sac.yaml` contains feed-forward SAC settings.
+- `config/training/recurrent_sac.yaml` contains recurrent SAC and sequence-replay settings.
 - `config/curricula/*.yaml` contains ordered opponent stages and convergence settings.
 
 Low-level market price bounds and economic constants remain in
@@ -125,7 +139,7 @@ The `env/` folder is part of the project code, not a virtual environment. It con
 ### Train a policy
 
 1. Activate your environment.
-2. Run `python pricing_train.py --config config/uniform_vs_uniform.yaml`.
+2. Run `python pricing_train.py --config config/sac/uniform_vs_uniform.yaml`.
 3. Inspect the saved metrics in [experiments/](experiments/).
 
 ### Evaluate a trained policy

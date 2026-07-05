@@ -44,6 +44,7 @@ class ExperimentOverrides:
     seed: Optional[int] = None
     device: Optional[str] = None
     save_dir: Optional[str] = None
+    training_config: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ class ResolvedExperiment:
 
     name: str
     source: Path
+    training_source: Path
     training_config: TrainingConfig
     curriculum_config: CurriculumConfig
 
@@ -62,9 +64,13 @@ EXPERIMENT_KEYS = {
 TRAINING_SECTIONS = {
     "environment": {"num_consumers", "episode_length"},
     "agent": {
-        "hidden_dim", "lr_actor", "lr_critic", "lr_alpha", "target_entropy",
+        "agent_type", "hidden_dim", "lr_actor", "lr_critic", "lr_alpha", "target_entropy",
         "gamma", "tau", "auto_alpha", "alpha", "log_std_min", "log_std_max",
         "buffer_size", "batch_size", "lr_scheduler", "lr_scheduler_kwargs", "device",
+        "sequence_length", "episode_buffer_capacity", "opponent_action_dim",
+        "opponent_embedding_dim", "encoder_hidden_dim", "actor_hidden_dim",
+        "critic_hidden_dim", "lr_encoder", "opponent_aux_loss_weight",
+        "grad_clip_norm", "min_episodes_before_update", "current_stage_weight",
     },
     "training": {"num_episodes", "warmup_steps", "updates_per_step"},
     "evaluation": {"eval_freq", "eval_episodes"},
@@ -206,6 +212,10 @@ def load_curriculum_config(
 
 
 def _validate_training(config: TrainingConfig, path: Path) -> None:
+    if config.agent_type not in {"sac", "recurrent_sac"}:
+        raise ExperimentConfigError(
+            f"{path}: agent_type must be 'sac' or 'recurrent_sac'"
+        )
     positive = (
         "num_consumers", "episode_length", "hidden_dim", "buffer_size", "batch_size",
         "num_episodes", "warmup_steps", "updates_per_step", "eval_freq",
@@ -233,6 +243,31 @@ def _validate_training(config: TrainingConfig, path: Path) -> None:
         raise ExperimentConfigError(
             f"{path}: lr_scheduler must be null, cosine, step, or exponential"
         )
+    if config.agent_type == "recurrent_sac":
+        recurrent_positive = (
+            "sequence_length", "episode_buffer_capacity", "opponent_action_dim",
+            "opponent_embedding_dim", "encoder_hidden_dim", "actor_hidden_dim",
+            "critic_hidden_dim", "lr_encoder",
+        )
+        for name in recurrent_positive:
+            value = getattr(config, name)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                raise ExperimentConfigError(f"{path}: {name} must be positive")
+        if config.opponent_aux_loss_weight < 0:
+            raise ExperimentConfigError(
+                f"{path}: opponent_aux_loss_weight cannot be negative"
+            )
+        if not 0.0 < config.current_stage_weight <= 1.0:
+            raise ExperimentConfigError(
+                f"{path}: current_stage_weight must be in (0, 1]"
+            )
+        if (
+            config.min_episodes_before_update is not None
+            and config.min_episodes_before_update <= 0
+        ):
+            raise ExperimentConfigError(
+                f"{path}: min_episodes_before_update must be positive or null"
+            )
 
 
 def _validate_curriculum(config: CurriculumConfig, path: Path) -> None:
@@ -272,12 +307,16 @@ def load_experiment(
             f"Invalid agent_strategy in {source}; expected one of: {allowed}"
         ) from exc
 
-    training_path = _resolve_reference(source, raw["training_config"], "training_config")
+    overrides = overrides or ExperimentOverrides()
+    training_path = (
+        overrides.training_config.resolve()
+        if overrides.training_config is not None
+        else _resolve_reference(source, raw["training_config"], "training_config")
+    )
     curriculum_path = _resolve_reference(source, raw["curriculum_config"], "curriculum_config")
     values = _load_training_values(training_path)
     values.update(environment_type=environment_type, save_dir=str(raw["save_dir"]))
 
-    overrides = overrides or ExperimentOverrides()
     if overrides.episodes is not None:
         values["num_episodes"] = overrides.episodes
     if overrides.seed is not None:
@@ -305,6 +344,7 @@ def load_experiment(
     return ResolvedExperiment(
         name=str(raw["name"]),
         source=source,
+        training_source=training_path,
         training_config=training_config,
         curriculum_config=curriculum_config,
     )
@@ -323,11 +363,51 @@ def build_environment(experiment: ResolvedExperiment):
 
 
 def build_agent(experiment: ResolvedExperiment, env):
-    """Build the curriculum replay buffer and SAC agent from resolved YAML."""
-    from models.buffer import CurriculumReplayBuffer
-    from models.sac import SAC
+    """Build the configured replay buffer and SAC agent implementation."""
+    from models.buffer import CurriculumReplayBuffer, CurriculumSequenceReplayBuffer
 
     config = experiment.training_config
+    if config.agent_type == "recurrent_sac":
+        from models.recurrent_sac_opponent_embedding import (
+            RecurrentSACOpponentEmbeddingAgent,
+        )
+
+        replay_buffer = CurriculumSequenceReplayBuffer(
+            capacity=config.episode_buffer_capacity,
+            batch_size=config.batch_size,
+            curriculum=experiment.curriculum_config.curriculum,
+            sequence_length=config.sequence_length,
+            current_stage_weight=config.current_stage_weight,
+        )
+        agent = RecurrentSACOpponentEmbeddingAgent(
+            obs_dim=env.observation_space.shape[0],
+            action_dim=env.action_space.shape[0],
+            opponent_action_dim=config.opponent_action_dim,
+            opponent_embedding_dim=config.opponent_embedding_dim,
+            encoder_hidden_dim=config.encoder_hidden_dim,
+            actor_hidden_dim=config.actor_hidden_dim,
+            critic_hidden_dim=config.critic_hidden_dim,
+            lr_actor=config.lr_actor,
+            lr_critic=config.lr_critic,
+            lr_encoder=config.lr_encoder,
+            lr_alpha=config.lr_alpha,
+            gamma=config.gamma,
+            tau=config.tau,
+            alpha=config.alpha,
+            auto_alpha=config.auto_alpha,
+            target_entropy=config.target_entropy,
+            opponent_aux_loss_weight=config.opponent_aux_loss_weight,
+            log_std_min=config.log_std_min,
+            log_std_max=config.log_std_max,
+            grad_clip_norm=config.grad_clip_norm,
+            device=config.device,
+            replay_buffer=replay_buffer,
+            min_episodes_before_update=config.min_episodes_before_update,
+        )
+        return replay_buffer, agent
+
+    from models.sac import SAC
+
     replay_buffer = CurriculumReplayBuffer(
         capacity=config.buffer_size,
         batch_size=config.batch_size,

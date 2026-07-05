@@ -1,0 +1,5 @@
+name: sac_bbp_vs_bbp
+agent_strategy: bbp_pricing
+training_config: ../training/sac.yaml
+curriculum_config: ../curricula/bbp.yaml
+save_dir: experiments/sac/bbp_vs_bbp/runs/1
