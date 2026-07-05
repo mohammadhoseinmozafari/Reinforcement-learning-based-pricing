@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch
+from unittest.mock import Mock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -192,7 +193,7 @@ class RecurrentAgentReplayIntegrationTests(unittest.TestCase):
             }
         }
 
-        metrics = make_agent().update(batch)
+        metrics = make_agent().update_from_batch(batch)
         for name in (
             "critic_loss", "actor_loss", "opponent_prediction_loss",
             "alpha_loss", "alpha", "total_loss",
@@ -212,10 +213,39 @@ class RecurrentAgentReplayIntegrationTests(unittest.TestCase):
         batch = replay.sample()
 
         agent = make_agent()
-        metrics = agent.update(batch)
+        metrics = agent.update_from_batch(batch)
         self.assertEqual(agent.total_updates, 1)
         self.assertTrue(np.isfinite(metrics["total_loss"]))
         self.assertEqual(batch["mask"].shape, (3, SEQUENCE_LENGTH, 1))
+
+    def test_zero_argument_update_waits_for_episode_batch(self):
+        replay = CurriculumSequenceReplayBuffer(
+            capacity=4,
+            batch_size=2,
+            curriculum=FakeCurriculum(),
+            sequence_length=SEQUENCE_LENGTH,
+        )
+        agent = RecurrentSACOpponentEmbeddingAgent(
+            obs_dim=OBS_DIM,
+            action_dim=ACTION_DIM,
+            opponent_action_dim=OPPONENT_ACTION_DIM,
+            opponent_embedding_dim=5,
+            encoder_hidden_dim=8,
+            actor_hidden_dim=8,
+            critic_hidden_dim=8,
+            replay_buffer=replay,
+            device="cpu",
+        )
+        agent.update_from_batch = Mock(return_value={"critic_loss": 1.0})
+
+        replay.push(make_episode(length=2))
+        self.assertIsNone(agent.update())
+        agent.update_from_batch.assert_not_called()
+
+        replay.push(make_episode(length=2, offset=1.0))
+        result = agent.update()
+        self.assertEqual(result, {"critic_loss": 1.0})
+        agent.update_from_batch.assert_called_once()
 
     def test_update_uses_pre_decision_and_post_transition_contexts(self):
         """Current embeddings exclude transition t; next embeddings include it."""
@@ -235,7 +265,7 @@ class RecurrentAgentReplayIntegrationTests(unittest.TestCase):
             capture_encoder_input
         )
         try:
-            agent.update(batch)
+            agent.update_from_batch(batch)
         finally:
             hook.remove()
 

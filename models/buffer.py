@@ -265,6 +265,52 @@ class RecencyBiasReplayBuffer(BaseReplayBuffer):
         return len(self.buffer)
 
 
+class EpisodeBuilder:
+    """Accumulate transitions and materialize one replay-ready episode."""
+
+    FIELDS = (
+        "obs", "actions", "rewards", "next_obs", "dones", "opponent_actions"
+    )
+
+    def __init__(self) -> None:
+        self._values = {field: [] for field in self.FIELDS}
+
+    def append(
+        self,
+        obs,
+        action,
+        reward,
+        next_obs,
+        done,
+        opponent_action,
+    ) -> None:
+        """Append one transition using stable float32 replay shapes."""
+        self._values["obs"].append(np.asarray(obs, dtype=np.float32).copy())
+        self._values["actions"].append(np.asarray(action, dtype=np.float32).copy())
+        self._values["rewards"].append(
+            np.asarray([float(reward)], dtype=np.float32)
+        )
+        self._values["next_obs"].append(
+            np.asarray(next_obs, dtype=np.float32).copy()
+        )
+        self._values["dones"].append(
+            np.asarray([float(done)], dtype=np.float32)
+        )
+        self._values["opponent_actions"].append(
+            np.asarray(opponent_action, dtype=np.float32).reshape(-1).copy()
+        )
+
+    def build(self):
+        """Return a complete episode dictionary of stacked numpy arrays."""
+        return {
+            field: np.asarray(values, dtype=np.float32)
+            for field, values in self._values.items()
+        }
+
+    def __len__(self) -> int:
+        return len(self._values["obs"])
+
+
 class EpisodeReplayBuffer:
     def __init__(self, capacity_episodes: int, sequence_length: int) -> None:
         self.episodes = deque(maxlen=capacity_episodes)
@@ -275,6 +321,10 @@ class EpisodeReplayBuffer:
         if len(episode["obs"]) == 0:
             return
         self.episodes.append(episode)
+
+    def create_episode_builder(self) -> EpisodeBuilder:
+        """Create a builder compatible with this buffer's episode schema."""
+        return EpisodeBuilder()
 
     def sample(self):
         """Samples an episodes, masks the episodes which their length is below the sequence length"""
@@ -427,6 +477,10 @@ class CurriculumSequenceReplayBuffer:
         staged_episode["opponent_type"] = self.current_stage
         staged_episode["stage_id"] = self.current_stage_id
         self.buffers[self.current_stage].push(staged_episode)
+
+    def create_episode_builder(self) -> EpisodeBuilder:
+        """Create a builder; curriculum metadata is attached by ``push``."""
+        return EpisodeBuilder()
 
     def sample(self, batch_size=None):
         """Sample and stack a batch of padded sequences across eligible stages."""

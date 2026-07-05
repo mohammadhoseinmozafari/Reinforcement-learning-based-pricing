@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from models.buffer import CurriculumSequenceReplayBuffer
+from models.buffer import CurriculumSequenceReplayBuffer, EpisodeBuilder
 
 
 class FakeCurriculum:
@@ -51,6 +51,24 @@ class CurriculumSequenceReplayBufferTests(unittest.TestCase):
         self.assertEqual(self.buffer.stage_size("easy"), 0)
         self.assertEqual(len(self.buffer), 0)
         self.assertEqual(self.buffer.get_info(), {"easy": 0, "medium": 0, "hard": 0})
+
+    def test_episode_builder_shapes_scalar_fields_and_copies_inputs(self):
+        builder = self.buffer.create_episode_builder()
+        obs = np.array([1.0, 2.0], dtype=np.float32)
+        builder.append(obs, [0.1, 0.2], 3.0, [2.0, 3.0], False, [-1.0, 1.0])
+        obs[:] = 99.0
+        episode_data = builder.build()
+
+        self.assertIsInstance(builder, EpisodeBuilder)
+        self.assertEqual(len(builder), 1)
+        self.assertEqual(episode_data["rewards"].shape, (1, 1))
+        self.assertEqual(episode_data["dones"].shape, (1, 1))
+        np.testing.assert_array_equal(episode_data["obs"][0], [1.0, 2.0])
+
+    def test_empty_episode_builder_has_all_replay_fields(self):
+        builder = self.buffer.create_episode_builder()
+        self.assertEqual(len(builder), 0)
+        self.assertEqual(set(builder.build()), set(EpisodeBuilder.FIELDS))
 
     def test_push_routes_episode_through_active_stage(self):
         source = episode()

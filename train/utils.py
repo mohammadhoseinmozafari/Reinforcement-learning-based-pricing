@@ -81,7 +81,7 @@ def evaluate_agent(
 # =============================================================================
 
 def save_checkpoint(
-    agent: SAC,
+    agent: Any,
     metrics: TrainingMetrics,
     config: TrainingConfig,
     episode: int,

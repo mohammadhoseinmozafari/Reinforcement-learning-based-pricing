@@ -125,9 +125,12 @@ class RecurrentActor(nn.Module):
         recurrent_output = self.head(recurrent_output)
         
         mean = self.mean_head(recurrent_output)
-        log_std = self.log_std_head(recurrent_output).clamp(
-            self.log_std_min, self.log_std_max
-        )
+        raw_log_std = self.log_std_head(recurrent_output)
+        log_std = raw_log_std.clamp(self.log_std_min, self.log_std_max)
+        self.last_mean = mean.detach()
+        self.last_raw_log_std = raw_log_std.detach()
+        self.last_log_std = log_std.detach()
+        self.last_std = log_std.exp().detach()
 
         distribution = Normal(mean, log_std.exp())
         pre_tanh = mean if deterministic else distribution.rsample()
@@ -262,6 +265,8 @@ class RecurrentSACOpponentEmbeddingAgent:
         action_high: float | Sequence[float] = 1.0,
         grad_clip_norm: Optional[float] = 10.0,
         device: Optional[str] = None,
+        replay_buffer=None,
+        min_episodes_before_update: Optional[int] = None,
     ) -> None:
         self.obs_dim = obs_dim
         self.action_dim = action_dim
@@ -275,6 +280,16 @@ class RecurrentSACOpponentEmbeddingAgent:
         self.device = torch.device(
             device or ("cuda" if torch.cuda.is_available() else "cpu")
         )
+        self.replay_buffer = replay_buffer
+        self._minimum_episodes_was_defaulted = min_episodes_before_update is None
+        default_minimum = getattr(replay_buffer, "batch_size", 1)
+        self.min_episodes_before_update = (
+            default_minimum
+            if min_episodes_before_update is None
+            else min_episodes_before_update
+        )
+        if self.min_episodes_before_update <= 0:
+            raise ValueError("min_episodes_before_update must be positive")
 
         self.opponent_encoder = OpponentEncoder(
             obs_dim, action_dim, opponent_action_dim,
@@ -309,6 +324,7 @@ class RecurrentSACOpponentEmbeddingAgent:
         self._fixed_alpha = float(alpha)
         self.encoder_hidden: Optional[Tensor] = None
         self.actor_hidden: Optional[Tensor] = None
+        self._last_policy_stats: Optional[Dict[str, np.ndarray]] = None
         self.total_updates = 0
 
     @property
@@ -356,6 +372,13 @@ class RecurrentSACOpponentEmbeddingAgent:
                 obs_tensor, z_seq, self.actor_hidden, deterministic=deterministic
             )
         selected = mean_action if deterministic else action
+        self._last_policy_stats = {
+            "mean": self.actor.last_mean[0, -1].cpu().numpy(),
+            "std": self.actor.last_std[0, -1].cpu().numpy(),
+            "raw_log_std": self.actor.last_raw_log_std[0, -1].cpu().numpy(),
+            "log_std": self.actor.last_log_std[0, -1].cpu().numpy(),
+            "action": selected[0, 0].cpu().numpy(),
+        }
         return selected[0, 0].cpu().numpy()
 
     def _online_vector(self, value, expected_dim: int, name: str) -> Tensor:
@@ -364,7 +387,21 @@ class RecurrentSACOpponentEmbeddingAgent:
             raise ValueError(f"{name} must contain {expected_dim} values")
         return torch.as_tensor(array, device=self.device).view(1, 1, expected_dim)
 
-    def update(self, batch: Dict[str, Any]) -> Dict[str, float]:
+    def update(self) -> Optional[Dict[str, float]]:
+        """Sample sequence replay internally once enough episodes are available."""
+        if self.replay_buffer is None:
+            raise RuntimeError("update() requires an injected replay_buffer")
+        if len(self.replay_buffer) < self.min_episodes_before_update:
+            return None
+        return self.update_from_batch(self.replay_buffer.sample())
+
+    def attach_replay_buffer(self, replay_buffer) -> None:
+        """Attach sequence replay and adopt its batch-size readiness default."""
+        self.replay_buffer = replay_buffer
+        if self._minimum_episodes_was_defaulted:
+            self.min_episodes_before_update = replay_buffer.batch_size
+
+    def update_from_batch(self, batch: Dict[str, Any]) -> Dict[str, float]:
         """Perform one masked recurrent SAC update from a sequence batch."""
         tensors = self._prepare_batch(batch)
         obs = tensors["obs"]
@@ -467,6 +504,46 @@ class RecurrentSACOpponentEmbeddingAgent:
             "alpha_loss": float(alpha_loss.detach().item()),
             "alpha": self.alpha,
             "total_loss": float(total_loss.item()),
+        }
+
+    def get_policy_stats(self, obs=None) -> Dict[str, np.ndarray]:
+        """Return distribution statistics from the latest online action."""
+        if self._last_policy_stats is None:
+            zeros = np.zeros(self.action_dim, dtype=np.float32)
+            return {
+                "mean": zeros.copy(),
+                "std": zeros.copy(),
+                "raw_log_std": zeros.copy(),
+                "log_std": zeros.copy(),
+                "action": zeros.copy(),
+            }
+        return {
+            name: values.copy()
+            for name, values in self._last_policy_stats.items()
+        }
+
+    def get_current_lrs(self) -> Dict[str, float]:
+        """Expose optimizer rates expected by the shared curriculum logger."""
+        rates = {
+            "actor_lr": self.actor_optimizer.param_groups[0]["lr"],
+            "critic_lr": self.critic_optimizer.param_groups[0]["lr"],
+            "encoder_lr": self.encoder_optimizer.param_groups[0]["lr"],
+        }
+        if self.alpha_optimizer is not None:
+            rates["alpha_lr"] = self.alpha_optimizer.param_groups[0]["lr"]
+        return rates
+
+    def get_info(self) -> Dict[str, Any]:
+        """Return concise architecture and optimization configuration."""
+        return {
+            "gamma": self.gamma,
+            "tau": self.tau,
+            "alpha": self.alpha,
+            "auto_alpha": self.auto_alpha,
+            "target_entropy": self.target_entropy,
+            "opponent_action_dim": self.opponent_action_dim,
+            "opponent_aux_loss_weight": self.opponent_aux_loss_weight,
+            "min_episodes_before_update": self.min_episodes_before_update,
         }
 
     def _prepare_batch(self, batch: Dict[str, Any]) -> Dict[str, Tensor]:
