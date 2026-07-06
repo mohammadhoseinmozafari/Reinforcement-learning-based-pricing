@@ -17,6 +17,10 @@ Classes:
     UniformMyopicOpponent: One-period profit maximization over a price grid
     UniformUndercutterOpponent: Delayed response below the agent's prior price
     UniformTitForTatOpponent: Cooperative pricing with finite retaliation
+    BBPFixedDiscriminatorOpponent: Episode-fixed randomized BBP spread
+    BBPAcquisitionPredatorOpponent: Aggressive new-customer acquisition
+    BBPLoyaltyHarvesterOpponent: High established-customer pricing
+    BBPMyopicSegmentOptimizerOpponent: Segmented one-period grid optimization
     ConstantOpponentPolicy: Fixed prices regardless of state
     Phase1EmpiricalOpponentPolicy: Uses Phase 1 experiment results
     RuleBasedOpponentPolicy: Simple rule-based price adjustments
@@ -64,6 +68,24 @@ class PriceBounds:
     def clip_bbp_old(self, price: float) -> float:
         """Clip BBP old customer price to valid bounds."""
         return np.clip(price, self.bbp_old_min, self.bbp_old_max)
+
+
+def _bounded_bbp_prices(
+    bounds: PriceBounds,
+    price_new: float,
+    price_old: float,
+    min_spread: float = 1e-6,
+) -> Tuple[float, float]:
+    """Clip a BBP pair while preserving its required old-customer premium."""
+    bounded_new = float(bounds.clip_bbp_new(price_new))
+    bounded_old = float(bounds.clip_bbp_old(price_old))
+    bounded_old = max(bounded_old, bounded_new + min_spread)
+    bounded_old = float(bounds.clip_bbp_old(bounded_old))
+    if bounded_old < bounded_new + min_spread:
+        bounded_new = float(bounds.clip_bbp_new(bounded_old - min_spread))
+    if bounded_old < bounded_new + min_spread:
+        raise ValueError("BBP bounds cannot satisfy the required price spread")
+    return bounded_new, bounded_old
 
 
 @dataclass
@@ -911,6 +933,348 @@ class UniformTitForTatOpponent(OpponentPolicy):
         )
 
 
+class BBPFixedDiscriminatorOpponent(OpponentPolicy):
+    """Use one randomized but episode-fixed BBP price spread."""
+
+    def __init__(
+        self,
+        mid_price: float = 2.75,
+        high_price: float = 4.0,
+        discount_min: float = 0.5,
+        discount_max: float = 2.0,
+        markup_min: float = 0.5,
+        markup_max: float = 2.0,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the non-adaptive introductory BBP opponent."""
+        super().__init__(regime=1, bounds=bounds, seed=seed)
+        self.mid_price = float(mid_price)
+        self.high_price = float(high_price)
+        self.discount_min = float(discount_min)
+        self.discount_max = float(discount_max)
+        self.markup_min = float(markup_min)
+        self.markup_max = float(markup_max)
+        self._validate_parameters()
+        self._sample_episode_prices()
+
+    def _validate_parameters(self) -> None:
+        values = (
+            self.mid_price, self.high_price,
+            self.discount_min, self.discount_max,
+            self.markup_min, self.markup_max,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("fixed discriminator parameters must be finite")
+        if self.mid_price >= self.high_price:
+            raise ValueError("mid_price must be less than high_price")
+        if self.discount_min <= 0 or self.discount_min >= self.discount_max:
+            raise ValueError("discount bounds must satisfy 0 < min < max")
+        if self.markup_min <= 0 or self.markup_min >= self.markup_max:
+            raise ValueError("markup bounds must satisfy 0 < min < max")
+
+    def _sample_episode_prices(self) -> None:
+        self._base_price = float(self.rng.uniform(self.mid_price, self.high_price))
+        self._discount = float(
+            self.rng.uniform(self.discount_min, self.discount_max)
+        )
+        self._markup = float(self.rng.uniform(self.markup_min, self.markup_max))
+        self._price_new, self._price_old = _bounded_bbp_prices(
+            self.bounds,
+            self._base_price - self._discount,
+            self._base_price + self._markup,
+        )
+
+    @property
+    def base_price(self) -> float:
+        return self._base_price
+
+    @property
+    def discount(self) -> float:
+        return self._discount
+
+    @property
+    def markup(self) -> float:
+        return self._markup
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        super().reset(seed=seed)
+        self._sample_episode_prices()
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        return float(self.bounds.clip_uniform(self._base_price))
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        return self._price_new, self._price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(new={self._price_new:.2f}, "
+            f"old={self._price_old:.2f}, base={self._base_price:.2f}, regime=1)"
+        )
+
+
+class BBPAcquisitionPredatorOpponent(OpponentPolicy):
+    """Discount acquisition aggressively while charging established buyers more."""
+
+    def __init__(
+        self,
+        epsilon_min: float = 0.0,
+        epsilon_max: float = 1.0,
+        spread_min: float = 1.0,
+        spread_max: float = 4.0,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the episode-randomized customer-acquisition predator."""
+        super().__init__(regime=1, bounds=bounds, seed=seed)
+        self.epsilon_min = float(epsilon_min)
+        self.epsilon_max = float(epsilon_max)
+        self.spread_min = float(spread_min)
+        self.spread_max = float(spread_max)
+        self._validate_parameters()
+        self._sample_episode_prices()
+
+    def _validate_parameters(self) -> None:
+        values = (
+            self.epsilon_min, self.epsilon_max,
+            self.spread_min, self.spread_max,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("acquisition predator parameters must be finite")
+        if self.epsilon_min < 0 or self.epsilon_min >= self.epsilon_max:
+            raise ValueError("epsilon bounds must satisfy 0 <= min < max")
+        if self.epsilon_max > self.bounds.bbp_new_max - self.bounds.bbp_new_min:
+            raise ValueError("epsilon_max exceeds the new-customer price range")
+        if self.spread_min <= 0 or self.spread_min >= self.spread_max:
+            raise ValueError("spread bounds must satisfy 0 < min < max")
+
+    def _sample_episode_prices(self) -> None:
+        self._epsilon = float(
+            self.rng.uniform(self.epsilon_min, self.epsilon_max)
+        )
+        self._spread = float(self.rng.uniform(self.spread_min, self.spread_max))
+        raw_new = self.bounds.bbp_new_min + self._epsilon
+        self._price_new, self._price_old = _bounded_bbp_prices(
+            self.bounds,
+            raw_new,
+            raw_new + self._spread,
+        )
+
+    @property
+    def epsilon(self) -> float:
+        return self._epsilon
+
+    @property
+    def spread(self) -> float:
+        return self._spread
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        super().reset(seed=seed)
+        self._sample_episode_prices()
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        return float(self.bounds.clip_uniform(self._price_new))
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        return self._price_new, self._price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(new={self._price_new:.2f}, "
+            f"old={self._price_old:.2f}, spread={self._spread:.2f}, regime=1)"
+        )
+
+
+class BBPLoyaltyHarvesterOpponent(OpponentPolicy):
+    """Offer moderate acquisition prices and harvest established customers."""
+
+    def __init__(
+        self,
+        mid_low: float = 2.0,
+        mid_price: float = 3.0,
+        mid_high: float = 3.5,
+        p_max: Optional[float] = None,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the episode-randomized loyalty-harvesting opponent."""
+        super().__init__(regime=1, bounds=bounds, seed=seed)
+        self.mid_low = float(mid_low)
+        self.mid_price = float(mid_price)
+        self.mid_high = float(mid_high)
+        self.p_max = self.bounds.bbp_old_max if p_max is None else float(p_max)
+        self._validate_parameters()
+        self._sample_episode_prices()
+
+    def _validate_parameters(self) -> None:
+        values = (self.mid_low, self.mid_price, self.mid_high, self.p_max)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("loyalty harvester parameters must be finite")
+        if not (
+            self.bounds.bbp_new_min <= self.mid_low < self.mid_price
+            <= self.bounds.bbp_new_max
+        ):
+            raise ValueError("new-customer interval lies outside BBP new bounds")
+        if not (
+            self.bounds.bbp_old_min <= self.mid_high < self.p_max
+            <= self.bounds.bbp_old_max
+        ):
+            raise ValueError("old-customer interval lies outside BBP old bounds")
+        if self.mid_high <= self.mid_price:
+            raise ValueError("mid_high must exceed the maximum new-customer price")
+
+    def _sample_episode_prices(self) -> None:
+        raw_new = float(self.rng.uniform(self.mid_low, self.mid_price))
+        raw_old = float(self.rng.uniform(self.mid_high, self.p_max))
+        self._price_new, self._price_old = _bounded_bbp_prices(
+            self.bounds, raw_new, raw_old
+        )
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        super().reset(seed=seed)
+        self._sample_episode_prices()
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        midpoint = (self._price_new + self._price_old) / 2.0
+        return float(self.bounds.clip_uniform(midpoint))
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        return self._price_new, self._price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(new={self._price_new:.2f}, "
+            f"old={self._price_old:.2f}, regime=1)"
+        )
+
+
+class BBPMyopicSegmentOptimizerOpponent(OpponentPolicy):
+    """Grid-search the one-period optimum for new and established segments."""
+
+    def __init__(
+        self,
+        grid_size: int = 25,
+        min_spread: float = 0.1,
+        transport_cost: float = TRANSPORTATION_COST,
+        marginal_cost: float = MARGINAL_COST,
+        market_state_weight: float = 0.25,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the deterministic segmented one-period optimizer."""
+        super().__init__(regime=1, bounds=bounds, seed=seed)
+        self.grid_size = grid_size
+        self.min_spread = float(min_spread)
+        self.transport_cost = float(transport_cost)
+        self.marginal_cost = float(marginal_cost)
+        self.market_state_weight = float(market_state_weight)
+        self._validate_parameters()
+        self.new_candidate_prices = np.linspace(
+            self.bounds.bbp_new_min,
+            self.bounds.bbp_new_max,
+            self.grid_size,
+            dtype=np.float64,
+        )
+        self.old_candidate_prices = np.linspace(
+            self.bounds.bbp_old_min,
+            self.bounds.bbp_old_max,
+            self.grid_size,
+            dtype=np.float64,
+        )
+        self._price_new = float(self.new_candidate_prices[0])
+        self._price_old = float(self.old_candidate_prices[-1])
+        self._last_expected_profit = 0.0
+
+    def _validate_parameters(self) -> None:
+        if not isinstance(self.grid_size, int) or isinstance(self.grid_size, bool):
+            raise ValueError("grid_size must be an integer")
+        if self.grid_size < 2:
+            raise ValueError("grid_size must be at least 2")
+        values = (
+            self.min_spread,
+            self.transport_cost,
+            self.marginal_cost,
+            self.market_state_weight,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("segment optimizer parameters must be finite")
+        if self.min_spread < 0:
+            raise ValueError("min_spread must be non-negative")
+        if self.transport_cost <= 0:
+            raise ValueError("transport_cost must be positive")
+        if not 0.0 <= self.market_state_weight <= 1.0:
+            raise ValueError("market_state_weight must be in [0, 1]")
+        if self.bounds.bbp_old_max < self.bounds.bbp_new_min + self.min_spread:
+            raise ValueError("BBP bounds cannot satisfy min_spread")
+
+    def _expected_share(
+        self,
+        candidate_prices: np.ndarray,
+        competitor_price: float,
+        observed_share: float,
+    ) -> np.ndarray:
+        hotelling_share = 0.5 + (
+            competitor_price - candidate_prices
+        ) / (2.0 * self.transport_cost)
+        blended_share = (
+            (1.0 - self.market_state_weight) * hotelling_share
+            + self.market_state_weight * observed_share
+        )
+        return np.clip(blended_share, 0.0, 1.0)
+
+    def expected_profits(self, observation: OpponentObservation) -> np.ndarray:
+        """Return expected profit for every new/old candidate combination."""
+        new_prices = self.new_candidate_prices[:, None]
+        old_prices = self.old_candidate_prices[None, :]
+        observed_share = float(np.clip(observation.market_share, 0.0, 1.0))
+        new_share = self._expected_share(
+            new_prices,
+            float(observation.competitor_price_new),
+            observed_share,
+        )
+        old_share = self._expected_share(
+            old_prices,
+            float(observation.competitor_price_old),
+            observed_share,
+        )
+        new_weight = float(np.clip(observation.new_old_ratio, 0.0, 1.0))
+        if observation.last_demand_ratio <= 0:
+            new_weight = 0.5
+        old_weight = 1.0 - new_weight
+        profits = (
+            new_weight * (new_prices - self.marginal_cost) * new_share
+            + old_weight * (old_prices - self.marginal_cost) * old_share
+        )
+        valid = old_prices >= new_prices + self.min_spread
+        return np.where(valid, profits, -np.inf)
+
+    @property
+    def last_expected_profit(self) -> float:
+        return self._last_expected_profit
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        midpoint = (self._price_new + self._price_old) / 2.0
+        return float(self.bounds.clip_uniform(midpoint))
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        profits = self.expected_profits(observation)
+        best_flat_index = int(np.argmax(profits))
+        best_new_index, best_old_index = np.unravel_index(
+            best_flat_index, profits.shape
+        )
+        self._price_new = float(self.new_candidate_prices[best_new_index])
+        self._price_old = float(self.old_candidate_prices[best_old_index])
+        self._last_expected_profit = float(profits[best_new_index, best_old_index])
+        return self._price_new, self._price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(grid_size={self.grid_size}, "
+            f"min_spread={self.min_spread:.2f}, regime=1)"
+        )
+
+
 # =============================================================================
 # CONSTANT OPPONENT POLICY
 # =============================================================================
@@ -1222,6 +1586,10 @@ def create_opponent_policy(
         "uniform_myopic": UniformMyopicOpponent,
         "uniform_undercutter": UniformUndercutterOpponent,
         "uniform_tit_for_tat": UniformTitForTatOpponent,
+        "bbp_fixed_discriminator": BBPFixedDiscriminatorOpponent,
+        "bbp_acquisition_predator": BBPAcquisitionPredatorOpponent,
+        "bbp_loyalty_harvester": BBPLoyaltyHarvesterOpponent,
+        "bbp_myopic_segment_optimizer": BBPMyopicSegmentOptimizerOpponent,
         "rule_based": RuleBasedOpponentPolicy,
         "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
@@ -1241,6 +1609,37 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+    "bbp_myopic_segment_optimizer": {
+        "policy_type": "bbp_myopic_segment_optimizer",
+        "grid_size": 25,
+        "min_spread": 0.1,
+        "transport_cost": TRANSPORTATION_COST,
+        "marginal_cost": MARGINAL_COST,
+        "market_state_weight": 0.25,
+    },
+    "bbp_loyalty_harvester": {
+        "policy_type": "bbp_loyalty_harvester",
+        "mid_low": 2.0,
+        "mid_price": 3.0,
+        "mid_high": 3.5,
+        "p_max": PRICE_BBP_OLD_MAX,
+    },
+    "bbp_acquisition_predator": {
+        "policy_type": "bbp_acquisition_predator",
+        "epsilon_min": 0.0,
+        "epsilon_max": 1.0,
+        "spread_min": 1.0,
+        "spread_max": 4.0,
+    },
+    "bbp_fixed_discriminator": {
+        "policy_type": "bbp_fixed_discriminator",
+        "mid_price": 2.75,
+        "high_price": 4.0,
+        "discount_min": 0.5,
+        "discount_max": 2.0,
+        "markup_min": 0.5,
+        "markup_max": 2.0,
+    },
     "uniform_tit_for_tat": {
         "policy_type": "uniform_tit_for_tat",
         "p_min": PRICE_UNIFORM_MIN,

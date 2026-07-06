@@ -283,8 +283,9 @@ class PricingEnv(gym.Env):
             competitor_price_old= competitor_bbp_price_old,
 
             last_demand_ratio=opponent.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.5,
+            new_old_ratio=opponent.get_new_old_ratio(),
 
-            own_regime=own_regime,  
+            own_regime=own_regime,
             competitor_regime=competitor_regime,
               
             timestep=self._timestep,

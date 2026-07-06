@@ -86,7 +86,9 @@ SCHEDULER_KEYS = {
     "monitor_alpha", "min_episodes_per_stage", "max_episodes_per_stage",
 }
 STAGE_KEYS = {
-    "name", "opponent_type", "difficulty", "description", "min_episodes", "max_episodes"
+    "name", "opponent_type", "difficulty", "description",
+    "min_episodes", "max_episodes",
+    "min_episodes_per_stage", "max_episodes_per_stage",
 }
 
 
@@ -191,13 +193,30 @@ def load_curriculum_config(
 
         names.add(name)
         opponents.add(opponent)
+        min_episodes = int(raw_stage.get(
+            "min_episodes",
+            raw_stage.get("min_episodes_per_stage", 100),
+        ))
+        max_episodes = raw_stage.get(
+            "max_episodes",
+            raw_stage.get("max_episodes_per_stage"),
+        )
+        if min_episodes <= 0:
+            raise ExperimentConfigError(f"{location}: minimum episodes must be positive")
+        if max_episodes is not None:
+            max_episodes = int(max_episodes)
+            if max_episodes < min_episodes:
+                raise ExperimentConfigError(
+                    f"{location}: maximum episodes cannot be below minimum"
+                )
+
         stages.append(OpponentStage(
             name=name,
             opponent_type=opponent,
             difficulty=difficulty,
             description=str(raw_stage["description"]),
-            min_episodes=int(raw_stage.get("min_episodes", 100)),
-            max_episodes=raw_stage.get("max_episodes"),
+            min_episodes=min_episodes,
+            max_episodes=max_episodes,
         ))
 
     curriculum = ConfiguredCurriculum(stages)

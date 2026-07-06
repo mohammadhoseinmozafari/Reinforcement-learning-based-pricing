@@ -47,7 +47,8 @@ class AgentSelectionTests(unittest.TestCase):
             ExperimentOverrides(
                 training_config=(
                     PROJECT_ROOT / "config/training/recurrent_sac.yaml"
-                )
+                ),
+                device="cpu",
             ),
         )
         replay, agent = build_agent(experiment, self.env)
