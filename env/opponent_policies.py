@@ -14,6 +14,7 @@ Classes:
     OpponentPolicy: Abstract base class
     FixedUniformOpponentPolicy: One randomized price held for an episode
     UniformRandomOpponentPolicy: Episode base price with per-step Gaussian noise
+    UniformMyopicOpponent: One-period profit maximization over a price grid
     ConstantOpponentPolicy: Fixed prices regardless of state
     Phase1EmpiricalOpponentPolicy: Uses Phase 1 experiment results
     RuleBasedOpponentPolicy: Simple rule-based price adjustments
@@ -31,6 +32,8 @@ from config.constants import (
     PRICE_BBP_NEW_MAX,
     PRICE_BBP_OLD_MIN,
     PRICE_BBP_OLD_MAX,
+    MARGINAL_COST,
+    TRANSPORTATION_COST,
 )
 
 
@@ -408,7 +411,10 @@ class UniformRandomOpponentPolicy(OpponentPolicy):
         values = (self.p_min, self.p_max, self.sigma)
         if not all(np.isfinite(value) for value in values):
             raise ValueError("p_min, p_max, and sigma must be finite")
-        if self.p_min < self.bounds.uniform_min or self.p_max > self.bounds.uniform_max:
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
             raise ValueError("p_min and p_max must lie within uniform price bounds")
         if self.p_min >= self.p_max:
             raise ValueError("p_min must be less than p_max")
@@ -455,6 +461,139 @@ class UniformRandomOpponentPolicy(OpponentPolicy):
             f"{self.__class__.__name__}(base_price={self._base_price:.2f}, "
             f"range=({self.p_min:.2f}, {self.p_max:.2f}), "
             f"sigma={self.sigma:.2f}, regime=0)"
+        )
+
+
+class UniformMyopicOpponent(OpponentPolicy):
+    """Choose the one-period profit-maximizing uniform grid price.
+
+    The policy evaluates a fixed grid using a Hotelling demand approximation.
+    Candidate demand combines the static Hotelling cutoff implied by the
+    observed competitor price with the opponent's current market share. It
+    ignores future state changes, so the response remains deliberately myopic.
+    """
+
+    def __init__(
+        self,
+        p_min: Optional[float] = None,
+        p_max: Optional[float] = None,
+        grid_size: int = 25,
+        transport_cost: float = TRANSPORTATION_COST,
+        marginal_cost: float = MARGINAL_COST,
+        market_state_weight: float = 0.25,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the short-term rational uniform opponent.
+
+        Args:
+            p_min: Minimum candidate price.
+            p_max: Maximum candidate price.
+            grid_size: Number of evenly spaced candidate prices.
+            transport_cost: Hotelling transportation-cost coefficient.
+            marginal_cost: Per-unit marginal cost used in expected profit.
+            market_state_weight: Blend weight for the observed market share.
+            bounds: Market price bounds. Defaults to :class:`PriceBounds`.
+            seed: Retained for the common policy interface; search is deterministic.
+
+        Raises:
+            ValueError: If grid or economic parameters are invalid.
+        """
+        super().__init__(regime=0, bounds=bounds, seed=seed)
+        self.p_min = self.bounds.uniform_min if p_min is None else float(p_min)
+        self.p_max = self.bounds.uniform_max if p_max is None else float(p_max)
+        self.grid_size = grid_size
+        self.transport_cost = float(transport_cost)
+        self.marginal_cost = float(marginal_cost)
+        self.market_state_weight = float(market_state_weight)
+        self._validate_parameters()
+        self.candidate_prices = np.linspace(
+            self.p_min, self.p_max, self.grid_size, dtype=np.float64
+        )
+        self._current_price = float(self.candidate_prices[0])
+        self._last_expected_profit = 0.0
+
+    def _validate_parameters(self) -> None:
+        numeric_values = (
+            self.p_min,
+            self.p_max,
+            self.transport_cost,
+            self.marginal_cost,
+            self.market_state_weight,
+        )
+        if not all(np.isfinite(value) for value in numeric_values):
+            raise ValueError("myopic policy parameters must be finite")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min >= self.p_max:
+            raise ValueError("p_min must be less than p_max")
+        if not isinstance(self.grid_size, int) or isinstance(self.grid_size, bool):
+            raise ValueError("grid_size must be an integer")
+        if self.grid_size < 2:
+            raise ValueError("grid_size must be at least 2")
+        if self.transport_cost <= 0:
+            raise ValueError("transport_cost must be positive")
+        if not 0.0 <= self.market_state_weight <= 1.0:
+            raise ValueError("market_state_weight must be in [0, 1]")
+
+    def _expected_market_share(
+        self,
+        candidate_prices: np.ndarray,
+        observation: OpponentObservation,
+    ) -> np.ndarray:
+        competitor_price = float(observation.competitor_uniform_price)
+        hotelling_share = 0.5 + (
+            competitor_price - candidate_prices
+        ) / (2.0 * self.transport_cost)
+        observed_share = float(np.clip(observation.market_share, 0.0, 1.0))
+        expected_share = (
+            (1.0 - self.market_state_weight) * hotelling_share
+            + self.market_state_weight * observed_share
+        )
+        return np.clip(expected_share, 0.0, 1.0)
+
+    def expected_profits(self, observation: OpponentObservation) -> np.ndarray:
+        """Return one-period expected profit for every candidate grid price."""
+        expected_share = self._expected_market_share(
+            self.candidate_prices, observation
+        )
+        unit_margin = self.candidate_prices - self.marginal_cost
+        return unit_margin * expected_share
+
+    @property
+    def current_price(self) -> float:
+        """Most recently selected best-response price."""
+        return self._current_price
+
+    @property
+    def last_expected_profit(self) -> float:
+        """Expected one-period profit of the most recent grid optimum."""
+        return self._last_expected_profit
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        """Search the grid and return its highest-profit candidate."""
+        profits = self.expected_profits(observation)
+        best_index = int(np.argmax(profits))
+        self._current_price = float(self.candidate_prices[best_index])
+        self._last_expected_profit = float(profits[best_index])
+        return self._current_price
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        """Reuse the selected uniform price for inactive BBP placeholders."""
+        price_new = float(self.bounds.clip_bbp_new(self._current_price))
+        price_old = float(
+            self.bounds.clip_bbp_old(max(self._current_price, price_new))
+        )
+        return price_new, price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(grid_size={self.grid_size}, "
+            f"range=({self.p_min:.2f}, {self.p_max:.2f}), "
+            f"market_state_weight={self.market_state_weight:.2f}, regime=0)"
         )
 
 
@@ -766,6 +905,7 @@ def create_opponent_policy(
         "constant": ConstantOpponentPolicy,
         "fixed_uniform": FixedUniformOpponentPolicy,
         "uniform_random": UniformRandomOpponentPolicy,
+        "uniform_myopic": UniformMyopicOpponent,
         "rule_based": RuleBasedOpponentPolicy,
         "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
@@ -785,6 +925,15 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+    "uniform_myopic": {
+        "policy_type": "uniform_myopic",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "grid_size": 25,
+        "transport_cost": TRANSPORTATION_COST,
+        "marginal_cost": MARGINAL_COST,
+        "market_state_weight": 0.25,
+    },
     "uniform_random": {
         "policy_type": "uniform_random",
         "p_min": PRICE_UNIFORM_MIN,
