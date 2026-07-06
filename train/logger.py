@@ -245,6 +245,49 @@ class CurriculumTrainingLogger:
         print()
 
     # ------------------------------------------------------------
+    def log_environment_config(self, env: Any) -> None:
+        if not self.verbose:
+            return
+
+        env_info  = {
+        "num_consumers" : env.num_consumers,
+        "episode_length" : env.episode_length,
+        "seed_value" : env.seed_value,
+        "environment_type" : env.environment_type.value
+
+        }
+
+        max_param_width = max(  
+            (len(param.replace("_", " ").title()) for param in env_info.keys()),
+            default=20,
+        )
+        box_width = max(55, max_param_width + 30)
+        box = Box(box_width)
+
+        print()
+        print(box.top("ENVIRONMENTS CONFIGURATION"))
+        print(box.blank())
+        print(box.row(self.c(Color.BOLD + Color.BLUE, "Environment Parameters")))
+        print(box.blank())
+
+        for i, (param, value) in enumerate(env_info.items()):
+            param_display = param.replace("_", " ").title()
+            value_str = fmt_num(value)
+
+            left = f"  {self.c(Color.CYAN, param_display)}:"
+            right = self.c(Color.GREEN, value_str)
+            print(box.row_cols(left, right, max_param_width + 4))
+
+            if i < len(env_info) - 1 and i % 3 == 2:
+                print(box.row(self.c(Color.DIM, "·" * (box.inner - 4))))
+
+        print(box.divider())
+        summary = f"Configuration Summary: {len(env_info)} parameters initialized"
+        print(box.row(self.c(Color.BOLD, summary), align="center"))
+        print(box.bottom())
+        print()
+
+    
     def log_agent_config(self, agent: Any) -> None:
         if not self.verbose:
             return

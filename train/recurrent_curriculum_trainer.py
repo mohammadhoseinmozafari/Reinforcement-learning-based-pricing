@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from train.loggin_utils import setup_logger
+
 
 import hashlib
 import random
@@ -59,12 +59,6 @@ class RecurrentCurriculumTrainer:
 
         self.rng = np.random.default_rng(self.config.seed)
 
-        self.py_logger  = setup_logger(
-            "recurrent_curriculum_trainer",
-            log_dir= "train/rsac/logs",
-            level = logging.DEBUG if self.config.verbose else logging.INFO
-
-        )
 
         
         if agent.replay_buffer is None:
@@ -72,13 +66,8 @@ class RecurrentCurriculumTrainer:
         elif agent.replay_buffer is not replay_buffer:
             raise ValueError("agent and trainer must use the same replay buffer")
 
-        self.py_logger.info(
-            "Initialized recurrent trainer | seed=%d | episodes=%d | episode_length=%d",
-            self.config.seed,
-            self.config.num_episodes,
-            self.config.episode_length
-        )
-        
+
+
     @staticmethod
     def _normalize(value: float, minimum: float, maximum: float) -> float:
         normalized = (2.0 * (float(value) - minimum) / (maximum - minimum)) - 1.0
@@ -439,7 +428,8 @@ class RecurrentCurriculumTrainer:
         base_env = self.base_env
         env = self.env
         agent = self.agent
-
+        
+        logger.log_environment_config(base_env)
         logger.print_training_header()
         logger.log_replay_buffer(self.replay_buffer)
         logger.log_agent_config(agent)
