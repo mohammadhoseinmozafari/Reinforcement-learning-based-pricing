@@ -16,6 +16,7 @@ Classes:
     UniformRandomOpponentPolicy: Episode base price with per-step Gaussian noise
     UniformMyopicOpponent: One-period profit maximization over a price grid
     UniformUndercutterOpponent: Delayed response below the agent's prior price
+    UniformTitForTatOpponent: Cooperative pricing with finite retaliation
     ConstantOpponentPolicy: Fixed prices regardless of state
     Phase1EmpiricalOpponentPolicy: Uses Phase 1 experiment results
     RuleBasedOpponentPolicy: Simple rule-based price adjustments
@@ -729,6 +730,187 @@ class UniformUndercutterOpponent(OpponentPolicy):
         )
 
 
+class UniformTitForTatOpponent(OpponentPolicy):
+    """Cooperate at a reference price and retaliate against aggressive cuts.
+
+    The policy posts an episode-specific reference price until the observed
+    agent price falls below ``reference_price - threshold``. It then undercuts
+    the observed agent price for exactly ``punishment_length`` steps before
+    returning to cooperation. Episode parameters are sampled at reset.
+    """
+
+    def __init__(
+        self,
+        p_min: Optional[float] = None,
+        p_max: Optional[float] = None,
+        threshold_min: float = 0.3,
+        threshold_max: float = 1.0,
+        punishment_lengths: Sequence[int] = (3, 5, 8),
+        delta_min: float = 0.2,
+        delta_max: float = 0.8,
+        mid_price: Optional[float] = None,
+        high_price: Optional[float] = None,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the repeated-game uniform opponent.
+
+        Args:
+            p_min: Minimum posted price during punishment.
+            p_max: Maximum allowed posted price.
+            threshold_min: Minimum aggressive-cut threshold.
+            threshold_max: Maximum aggressive-cut threshold.
+            punishment_lengths: Candidate punishment durations in steps.
+            delta_min: Minimum punishment undercut amount.
+            delta_max: Maximum punishment undercut amount.
+            mid_price: Lower bound for the cooperative reference price.
+            high_price: Upper bound for the cooperative reference price.
+            bounds: Market price bounds. Defaults to :class:`PriceBounds`.
+            seed: Optional seed controlling episode parameter samples.
+
+        Raises:
+            ValueError: If price or episode-randomization parameters are invalid.
+        """
+        super().__init__(regime=0, bounds=bounds, seed=seed)
+        self.p_min = self.bounds.uniform_min if p_min is None else float(p_min)
+        self.p_max = self.bounds.uniform_max if p_max is None else float(p_max)
+        default_midpoint = (self.p_min + self.p_max) / 2.0
+        self.mid_price = default_midpoint if mid_price is None else float(mid_price)
+        self.high_price = self.p_max if high_price is None else float(high_price)
+        self.threshold_min = float(threshold_min)
+        self.threshold_max = float(threshold_max)
+        self.punishment_lengths = tuple(punishment_lengths)
+        self.delta_min = float(delta_min)
+        self.delta_max = float(delta_max)
+        self._validate_parameters()
+        self._punishment_remaining = 0
+        self._sample_episode_parameters()
+        self._current_price = self._reference_price
+
+    def _validate_parameters(self) -> None:
+        numeric_values = (
+            self.p_min,
+            self.p_max,
+            self.mid_price,
+            self.high_price,
+            self.threshold_min,
+            self.threshold_max,
+            self.delta_min,
+            self.delta_max,
+        )
+        if not all(np.isfinite(value) for value in numeric_values):
+            raise ValueError("tit-for-tat parameters must be finite")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+            or self.p_min >= self.p_max
+        ):
+            raise ValueError("p_min and p_max must define a valid bounded interval")
+        if not self.p_min <= self.mid_price < self.high_price <= self.p_max:
+            raise ValueError(
+                "reference bounds must satisfy p_min <= mid_price < "
+                "high_price <= p_max"
+            )
+        if self.threshold_min < 0 or self.threshold_min >= self.threshold_max:
+            raise ValueError(
+                "threshold bounds must satisfy 0 <= threshold_min < threshold_max"
+            )
+        if self.delta_min < 0 or self.delta_min >= self.delta_max:
+            raise ValueError("delta bounds must satisfy 0 <= delta_min < delta_max")
+        if not self.punishment_lengths:
+            raise ValueError("punishment_lengths must not be empty")
+        if any(
+            not isinstance(length, int)
+            or isinstance(length, bool)
+            or length < 1
+            for length in self.punishment_lengths
+        ):
+            raise ValueError("punishment lengths must be positive integers")
+
+    def _sample_episode_parameters(self) -> None:
+        self._threshold = float(
+            self.rng.uniform(self.threshold_min, self.threshold_max)
+        )
+        self._punishment_length = int(self.rng.choice(self.punishment_lengths))
+        self._delta = float(self.rng.uniform(self.delta_min, self.delta_max))
+        self._reference_price = float(
+            self.rng.uniform(self.mid_price, self.high_price)
+        )
+
+    @property
+    def threshold(self) -> float:
+        """Aggressive-cut threshold sampled for the current episode."""
+        return self._threshold
+
+    @property
+    def punishment_length(self) -> int:
+        """Punishment duration sampled for the current episode."""
+        return self._punishment_length
+
+    @property
+    def delta(self) -> float:
+        """Punishment undercut amount sampled for the current episode."""
+        return self._delta
+
+    @property
+    def reference_price(self) -> float:
+        """Cooperative price sampled for the current episode."""
+        return self._reference_price
+
+    @property
+    def punishment_remaining(self) -> int:
+        """Number of punishment actions remaining after the latest action."""
+        return self._punishment_remaining
+
+    @property
+    def is_punishing(self) -> bool:
+        """Whether the next action remains in the punishment phase."""
+        return self._punishment_remaining > 0
+
+    @property
+    def current_price(self) -> float:
+        """Most recently posted price."""
+        return self._current_price
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        """Sample episode parameters and return to cooperative state."""
+        super().reset(seed=seed)
+        self._sample_episode_parameters()
+        self._punishment_remaining = 0
+        self._current_price = self._reference_price
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        """Return a cooperative or punishment price for the current step."""
+        agent_price = float(observation.competitor_uniform_price)
+        aggressive_cut = agent_price < self._reference_price - self._threshold
+        if self._punishment_remaining == 0 and aggressive_cut:
+            self._punishment_remaining = self._punishment_length
+
+        if self._punishment_remaining > 0:
+            self._current_price = float(
+                np.clip(agent_price - self._delta, self.p_min, self.p_max)
+            )
+            self._punishment_remaining -= 1
+        else:
+            self._current_price = self._reference_price
+        return self._current_price
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        """Reuse the current uniform price for inactive BBP placeholders."""
+        price_new = float(self.bounds.clip_bbp_new(self._current_price))
+        price_old = float(
+            self.bounds.clip_bbp_old(max(self._current_price, price_new))
+        )
+        return price_new, price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(reference_price={self._reference_price:.2f}, "
+            f"threshold={self._threshold:.2f}, delta={self._delta:.2f}, "
+            f"punishment_length={self._punishment_length}, regime=0)"
+        )
+
+
 # =============================================================================
 # CONSTANT OPPONENT POLICY
 # =============================================================================
@@ -1039,6 +1221,7 @@ def create_opponent_policy(
         "uniform_random": UniformRandomOpponentPolicy,
         "uniform_myopic": UniformMyopicOpponent,
         "uniform_undercutter": UniformUndercutterOpponent,
+        "uniform_tit_for_tat": UniformTitForTatOpponent,
         "rule_based": RuleBasedOpponentPolicy,
         "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
@@ -1058,6 +1241,18 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+    "uniform_tit_for_tat": {
+        "policy_type": "uniform_tit_for_tat",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "threshold_min": 0.3,
+        "threshold_max": 1.0,
+        "punishment_lengths": (3, 5, 8),
+        "delta_min": 0.2,
+        "delta_max": 0.8,
+        "mid_price": (PRICE_UNIFORM_MIN + PRICE_UNIFORM_MAX) / 2.0,
+        "high_price": PRICE_UNIFORM_MAX,
+    },
     "uniform_undercutter": {
         "policy_type": "uniform_undercutter",
         "p_min": PRICE_UNIFORM_MIN,
