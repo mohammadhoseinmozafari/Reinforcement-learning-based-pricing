@@ -302,7 +302,7 @@ class CurriculumTrainingLogger:
         box = Box(box_width)
 
         print()
-        print(box.top("SAC AGENT CONFIGURATION"))
+        print(box.top("AGENT CONFIGURATION"))
         print(box.blank())
         print(box.row(self.c(Color.BOLD + Color.BLUE, "Agent Parameters")))
         print(box.blank())

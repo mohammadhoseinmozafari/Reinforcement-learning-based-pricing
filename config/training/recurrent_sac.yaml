@@ -17,7 +17,7 @@ agent:
   log_std_max: 0.1
   buffer_size: 100000
   batch_size: 32
-  device: null
+  device: "cuda"
   lr_scheduler: null
   lr_scheduler_kwargs: null
   sequence_length: 16
@@ -33,7 +33,7 @@ agent:
   current_stage_weight: 0.75
 
 training:
-  num_episodes: 1000
+  num_episodes: 2500
   warmup_steps: 500
   updates_per_step: 1
   stage_warmup_random_prob: 0.3

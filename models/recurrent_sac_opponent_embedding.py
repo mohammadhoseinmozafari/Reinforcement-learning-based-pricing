@@ -536,6 +536,7 @@ class RecurrentSACOpponentEmbeddingAgent:
     def get_info(self) -> Dict[str, Any]:
         """Return concise architecture and optimization configuration."""
         return {
+            "agent type" : "Recurrent SAC" ,
             "gamma": self.gamma,
             "tau": self.tau,
             "alpha": self.alpha,
@@ -544,6 +545,7 @@ class RecurrentSACOpponentEmbeddingAgent:
             "opponent_action_dim": self.opponent_action_dim,
             "opponent_aux_loss_weight": self.opponent_aux_loss_weight,
             "min_episodes_before_update": self.min_episodes_before_update,
+            "device" : self.device
         }
 
     def _prepare_batch(self, batch: Dict[str, Any]) -> Dict[str, Tensor]:
