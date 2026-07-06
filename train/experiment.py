@@ -72,8 +72,11 @@ TRAINING_SECTIONS = {
         "critic_hidden_dim", "lr_encoder", "opponent_aux_loss_weight",
         "grad_clip_norm", "min_episodes_before_update", "current_stage_weight",
     },
-    "training": {"num_episodes", "warmup_steps", "updates_per_step"},
-    "evaluation": {"eval_freq", "eval_episodes"},
+    "training": {
+        "num_episodes", "warmup_steps", "updates_per_step",
+        "stage_warmup_random_prob",
+    },
+    "evaluation": {"eval_freq", "eval_episodes", "eval_seed", "eval_seed_count"},
     "logging": {"log_freq", "save_freq", "verbose"},
     "reproducibility": {"seed"},
 }
@@ -243,6 +246,34 @@ def _validate_training(config: TrainingConfig, path: Path) -> None:
         raise ExperimentConfigError(
             f"{path}: lr_scheduler must be null, cosine, step, or exponential"
         )
+    if (
+        not isinstance(config.stage_warmup_random_prob, (int, float))
+        or isinstance(config.stage_warmup_random_prob, bool)
+        or not 0.0 <= config.stage_warmup_random_prob <= 1.0
+    ):
+        raise ExperimentConfigError(
+            f"{path}: stage_warmup_random_prob must be in [0, 1]"
+        )
+    if (
+        config.eval_seed_count is not None
+        and (
+            not isinstance(config.eval_seed_count, int)
+            or isinstance(config.eval_seed_count, bool)
+            or config.eval_seed_count <= 0
+        )
+    ):
+        raise ExperimentConfigError(
+            f"{path}: eval_seed_count must be positive or null"
+        )
+    if (
+        config.eval_seed is not None
+        and (
+            not isinstance(config.eval_seed, int)
+            or isinstance(config.eval_seed, bool)
+            or config.eval_seed < 0
+        )
+    ):
+        raise ExperimentConfigError(f"{path}: eval_seed must be a non-negative integer")
     if config.agent_type == "recurrent_sac":
         recurrent_positive = (
             "sequence_length", "episode_buffer_capacity", "opponent_action_dim",

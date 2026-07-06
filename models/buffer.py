@@ -272,8 +272,18 @@ class EpisodeBuilder:
         "obs", "actions", "rewards", "next_obs", "dones", "opponent_actions"
     )
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        episode_seed=None,
+        opponent_type=None,
+        stage_id=None,
+    ) -> None:
         self._values = {field: [] for field in self.FIELDS}
+        self._metadata = {
+            "episode_seed": episode_seed,
+            "opponent_type": opponent_type,
+            "stage_id": stage_id,
+        }
 
     def append(
         self,
@@ -302,10 +312,15 @@ class EpisodeBuilder:
 
     def build(self):
         """Return a complete episode dictionary of stacked numpy arrays."""
-        return {
+        episode = {
             field: np.asarray(values, dtype=np.float32)
             for field, values in self._values.items()
         }
+        episode.update({
+            key: value for key, value in self._metadata.items()
+            if value is not None
+        })
+        return episode
 
     def __len__(self) -> int:
         return len(self._values["obs"])
@@ -316,15 +331,24 @@ class EpisodeReplayBuffer:
         self.episodes = deque(maxlen=capacity_episodes)
         self.sequence_length = sequence_length
 
-    def push(self, episode) -> None:
+    def push_episode(self, episode) -> None:
         """Store an episode in the buffer."""
         if len(episode["obs"]) == 0:
             return
         self.episodes.append(episode)
 
-    def create_episode_builder(self) -> EpisodeBuilder:
+    def push(self, episode) -> None:
+        """Compatibility alias for older episodic replay callers."""
+        self.push_episode(episode)
+
+    def create_episode_builder(
+        self,
+        episode_seed=None,
+        opponent_type=None,
+        stage_id=None,
+    ) -> EpisodeBuilder:
         """Create a builder compatible with this buffer's episode schema."""
-        return EpisodeBuilder()
+        return EpisodeBuilder(episode_seed, opponent_type, stage_id)
 
     def sample(self):
         """Samples an episodes, masks the episodes which their length is below the sequence length"""
@@ -348,6 +372,7 @@ class EpisodeReplayBuffer:
                 "mask": mask,
                 "opponent_type": episode["opponent_type"],
                 "stage_id": episode["stage_id"],
+                "episode_seed": episode.get("episode_seed"),
             }
 
         pad = T - episode_len
@@ -369,6 +394,7 @@ class EpisodeReplayBuffer:
             "mask": mask,
             "opponent_type": episode["opponent_type"],
             "stage_id": episode["stage_id"],
+            "episode_seed": episode.get("episode_seed"),
         }
 
     def _pad(self, arr, target_len):
@@ -467,7 +493,7 @@ class CurriculumSequenceReplayBuffer:
         self.current_stage = stage_name
         self.current_stage_id = self.stage_ids[stage_name]
 
-    def push(self, episode) -> None:
+    def push_episode(self, episode) -> None:
         """Store a complete episode in the active stage buffer.
 
         A shallow copy prevents curriculum metadata from mutating the caller's
@@ -476,11 +502,20 @@ class CurriculumSequenceReplayBuffer:
         staged_episode = dict(episode)
         staged_episode["opponent_type"] = self.current_stage
         staged_episode["stage_id"] = self.current_stage_id
-        self.buffers[self.current_stage].push(staged_episode)
+        self.buffers[self.current_stage].push_episode(staged_episode)
 
-    def create_episode_builder(self) -> EpisodeBuilder:
-        """Create a builder; curriculum metadata is attached by ``push``."""
-        return EpisodeBuilder()
+    def push(self, episode) -> None:
+        """Compatibility alias for older episodic replay callers."""
+        self.push_episode(episode)
+
+    def create_episode_builder(
+        self,
+        episode_seed=None,
+        opponent_type=None,
+        stage_id=None,
+    ) -> EpisodeBuilder:
+        """Create a metadata-aware episode builder."""
+        return EpisodeBuilder(episode_seed, opponent_type, stage_id)
 
     def sample(self, batch_size=None):
         """Sample and stack a batch of padded sequences across eligible stages."""
@@ -524,6 +559,7 @@ class CurriculumSequenceReplayBuffer:
             ),
             "mask": np.stack([s["mask"] for s in sequences], axis=0),
             "opponent_types": [s["opponent_type"] for s in sequences],
+            "episode_seeds": [s.get("episode_seed") for s in sequences],
             "stage_ids": np.asarray(
                 [s["stage_id"] for s in sequences],
                 dtype=np.int64,

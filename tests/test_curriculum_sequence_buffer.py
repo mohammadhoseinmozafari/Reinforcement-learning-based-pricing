@@ -83,6 +83,20 @@ class CurriculumSequenceReplayBufferTests(unittest.TestCase):
         self.assertEqual(stored["opponent_type"], "medium")
         self.assertEqual(stored["stage_id"], 1)
 
+    def test_episode_metadata_survives_builder_and_sequence_sampling(self):
+        builder = self.buffer.create_episode_builder(
+            episode_seed=123,
+            opponent_type="easy",
+            stage_id=0,
+        )
+        builder.append([0, 0, 0], [0, 0], 0, [0, 0, 0], False, [0, 0])
+        self.buffer.push_episode(builder.build())
+
+        stored = self.buffer.buffers["easy"].episodes[0]
+        self.assertEqual(stored["episode_seed"], 123)
+        batch = self.buffer.sample(1)
+        self.assertEqual(batch["episode_seeds"], [123])
+
     def test_sample_returns_stacked_padded_sequences(self):
         self.buffer.push(episode(length=2))
         batch = self.buffer.sample()

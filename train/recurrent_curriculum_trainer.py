@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+from train.loggin_utils import setup_logger
+
+import hashlib
+import random
+
 from typing import TYPE_CHECKING, Dict, List, Tuple
 
 import numpy as np
@@ -42,17 +48,37 @@ class RecurrentCurriculumTrainer:
     ) -> None:
         self.config = config
         self.curriculum_config = curriculum_config
+        
         self.env_factory = env_factory
         self.base_env = base_env
         self.env = env
+
         self.replay_buffer = replay_buffer
+
         self.agent = agent
 
+        self.rng = np.random.default_rng(self.config.seed)
+
+        self.py_logger  = setup_logger(
+            "recurrent_curriculum_trainer",
+            log_dir= "train/rsac/logs",
+            level = logging.DEBUG if self.config.verbose else logging.INFO
+
+        )
+
+        
         if agent.replay_buffer is None:
             agent.attach_replay_buffer(replay_buffer)
         elif agent.replay_buffer is not replay_buffer:
             raise ValueError("agent and trainer must use the same replay buffer")
 
+        self.py_logger.info(
+            "Initialized recurrent trainer | seed=%d | episodes=%d | episode_length=%d",
+            self.config.seed,
+            self.config.num_episodes,
+            self.config.episode_length
+        )
+        
     @staticmethod
     def _normalize(value: float, minimum: float, maximum: float) -> float:
         normalized = (2.0 * (float(value) - minimum) / (maximum - minimum)) - 1.0
@@ -116,45 +142,117 @@ class RecurrentCurriculumTrainer:
         )
         raise KeyError(f"Cannot extract opponent action; expected {supported}")
 
+    def _sample_seed(self) -> int:
+        """Draw a reproducible, fresh seed from the trainer RNG."""
+        return int(self.rng.integers(0, 2**31 - 1))
+
+    @staticmethod
+    def _stable_int_hash(text: str) -> int:
+        digest = hashlib.md5(text.encode("utf-8")).hexdigest()
+        return int(digest[:8], 16)
+
+    def _get_eval_seeds(self, opponent_type: str, n: int) -> List[int]:
+        configured_base = getattr(self.config, "eval_seed", None)
+        base = self.config.seed + 10_000 if configured_base is None else configured_base
+        opponent_offset = self._stable_int_hash(str(opponent_type)) % 1_000_000
+        return [int(base + opponent_offset + index) for index in range(n)]
+
+    @staticmethod
+    def _create_episode_builder(
+        replay_buffer,
+        episode_seed=None,
+        opponent_type=None,
+        stage_id=None,
+    ):
+        """Create a builder while remaining compatible with simpler buffers."""
+        try:
+            return replay_buffer.create_episode_builder(
+                episode_seed=episode_seed,
+                opponent_type=opponent_type,
+                stage_id=stage_id,
+            )
+        except TypeError:
+            try:
+                return replay_buffer.create_episode_builder(
+                    episode_seed=episode_seed,
+                )
+            except TypeError:
+                return replay_buffer.create_episode_builder()
+
     def warmup(
         self,
         env,
         replay_buffer: CurriculumSequenceReplayBuffer,
         steps: int,
         seed: int,
+        agent=None,
+        random_action_prob: float = 1.0,
     ) -> None:
-        """Collect exactly ``steps`` random transitions as episodic replay."""
+        """Collect reproducibly randomized warmup episodes."""
         if steps <= 0:
             return
+        if not 0.0 <= random_action_prob <= 1.0:
+            raise ValueError("random_action_prob must be in [0, 1]")
 
+        rng = np.random.default_rng(seed)
         collected = 0
-        next_seed = seed
         while collected < steps:
-            state, _ = env.reset(seed=next_seed)
-            next_seed += 1
-            builder = replay_buffer.create_episode_builder()
+            episode_seed = int(rng.integers(0, 2**31 - 1))
+            state, _ = env.reset(seed=episode_seed)
+            if hasattr(env.action_space, "seed"):
+                env.action_space.seed(episode_seed)
 
-            while collected < steps and len(builder) < self.config.episode_length:
-                action = env.action_space.sample()
-                next_state, reward, terminated, truncated, info = env.step(action)
-                done = bool(terminated or truncated)
-                builder.append(
-                    state,
-                    action,
-                    reward,
-                    next_state,
-                    done,
-                    self._extract_opponent_action(info),
-                )
-                collected += 1
-                state = next_state
-                if done:
-                    break
+            opponent_type = getattr(replay_buffer, "current_stage", None)
+            stage_id = getattr(replay_buffer, "current_stage_id", None)
+            builder = self._create_episode_builder(
+                replay_buffer,
+                episode_seed=episode_seed,
+                opponent_type=opponent_type,
+                stage_id=stage_id,
+            )
+
+            previous_action = np.zeros(self.agent.action_dim, dtype=np.float32)
+            previous_reward = 0.0
+            previous_opponent_action = np.zeros(
+                self.agent.opponent_action_dim, dtype=np.float32
+            )
+            if agent is not None:
+                agent.reset_hidden()
+
+            try:
+                while collected < steps and len(builder) < self.config.episode_length:
+                    policy_action = None
+                    if agent is not None:
+                        policy_action = agent.select_action(
+                            state,
+                            prev_action=previous_action,
+                            prev_reward=previous_reward,
+                            opponent_action=previous_opponent_action,
+                        )
+                    use_random = agent is None or rng.random() < random_action_prob
+                    action = env.action_space.sample() if use_random else policy_action
+                    next_state, reward, terminated, truncated, info = env.step(action)
+                    done = bool(terminated or truncated)
+                    opponent_action = self._extract_opponent_action(info)
+                    builder.append(
+                        state, action, reward, next_state, done, opponent_action
+                    )
+                    collected += 1
+                    state = next_state
+                    previous_action = np.asarray(action, dtype=np.float32)
+                    previous_reward = float(reward)
+                    previous_opponent_action = opponent_action
+                    if done:
+                        break
+            finally:
+                if agent is not None:
+                    agent.reset_hidden()
 
             if len(builder):
-                replay_buffer.push(builder.build())
+                replay_buffer.push_episode(builder.build())
 
-        self.agent.reset_hidden()
+        if agent is not None:
+            agent.reset_hidden()
 
     def run_episode(
         self,
@@ -163,10 +261,19 @@ class RecurrentCurriculumTrainer:
         metrics: TrainingMetrics,
     ) -> Tuple[float, List[float], List[float]]:
         """Collect one episode, update from prior episodes, then store it."""
-        state, _ = env.reset()
+        episode_seed = self._sample_seed()
+        state, _ = env.reset(seed=episode_seed)
+
         metrics.reset_episode()
+
         agent.reset_hidden()
-        builder = self.replay_buffer.create_episode_builder()
+
+        builder = self._create_episode_builder(
+            self.replay_buffer,
+            episode_seed=episode_seed,
+            opponent_type=getattr(self.replay_buffer, "current_stage", None),
+            stage_id=getattr(self.replay_buffer, "current_stage_id", None),
+        )
 
         episode_reward = 0.0
         critic_losses: List[float] = []
@@ -210,7 +317,7 @@ class RecurrentCurriculumTrainer:
             agent.reset_hidden()
 
         if len(builder):
-            self.replay_buffer.push(builder.build())
+            self.replay_buffer.push_episode(builder.build())
 
         return episode_reward, critic_losses, actor_losses
 
@@ -234,6 +341,7 @@ class RecurrentCurriculumTrainer:
         agent: RecurrentSACOpponentEmbeddingAgent,
         num_episodes: int,
         max_steps: int,
+        opponent_type: str = "unknown",
     ) -> Tuple[float, Dict[str, Dict[str, float]]]:
         """Evaluate deterministically with hidden state isolated per episode."""
         if num_episodes <= 0:
@@ -243,8 +351,9 @@ class RecurrentCurriculumTrainer:
         stat_names = ("mean", "std", "raw_log_std", "log_std", "action")
         samples = {name: [] for name in stat_names}
 
-        for _ in range(num_episodes):
-            state, _ = env.reset()
+        eval_seeds = self._get_eval_seeds(opponent_type, num_episodes)
+        for episode_seed in eval_seeds:
+            state, _ = env.reset(seed=episode_seed)
             agent.reset_hidden()
             previous_action = np.zeros(agent.action_dim, dtype=np.float32)
             previous_reward = 0.0
@@ -312,6 +421,16 @@ class RecurrentCurriculumTrainer:
         from train.utils import save_checkpoint
 
         np.random.seed(self.config.seed)
+        random.seed(self.config.seed)
+        try:
+            import torch
+
+            torch.manual_seed(self.config.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self.config.seed)
+        except ImportError:
+            pass
+
         curriculum = OpponentCurriculumScheduler(self.curriculum_config)
         logger = CurriculumTrainingLogger(
             self.curriculum_config, verbose=self.config.verbose
@@ -327,16 +446,22 @@ class RecurrentCurriculumTrainer:
 
         metrics = TrainingMetrics()
         logger.log_warmup_start(self.config.warmup_steps)
+        initial_warmup_seed = self._sample_seed()
         self.warmup(
-            env, self.replay_buffer, self.config.warmup_steps, self.config.seed
+            env=env,
+            replay_buffer=self.replay_buffer,
+            steps=self.config.warmup_steps,
+            seed=initial_warmup_seed,
+            random_action_prob=1.0,
         )
         logger.log_start_training()
 
+        opponent_type = curriculum.current_stage.opponent_type
         for episode in range(self.config.num_episodes):
             current_stage = curriculum.current_stage
             if current_stage.opponent_type == "mixed":
                 assert current_stage.opponent_types
-                opponent_type = str(np.random.choice(current_stage.opponent_types))
+                opponent_type = str(self.rng.choice(current_stage.opponent_types))
                 base_env.close()
                 base_env, env = env_factory.create_environment(
                     config=self.config, opponent_type=opponent_type
@@ -360,11 +485,16 @@ class RecurrentCurriculumTrainer:
                 curriculum.step(avg_critic, avg_actor, agent.alpha)
 
             if (episode + 1) % self.config.eval_freq == 0:
+                eval_episode_count = (
+                    getattr(self.config, "eval_seed_count", None)
+                    or self.config.eval_episodes
+                )
                 eval_reward, policy_stats = self.evaluate_recurrent_agent(
                     base_env,
                     agent,
-                    self.config.eval_episodes,
+                    eval_episode_count,
                     self.config.episode_length,
+                    opponent_type=opponent_type,
                 )
                 metrics.eval_rewards.append(eval_reward)
                 logger.log_episode_progress(
@@ -384,24 +514,35 @@ class RecurrentCurriculumTrainer:
                     if new_opponent.opponent_type == "mixed":
                         assert new_opponent.opponent_types
                         logger.log_mixed_stage_entry(new_opponent.opponent_types)
+                        opponent_type = str(
+                            self.rng.choice(new_opponent.opponent_types)
+                        )
                     else:
                         opponent_type = new_opponent.opponent_type
-                        base_env, env = env_factory.create_environment(
-                            config=self.config, opponent_type=opponent_type
-                        )
-                        self.replay_buffer.set_stage(opponent_type)
-                        agent.reset_hidden()
-                        logger.log_replay_buffer_stage_change(
-                            self.replay_buffer.current_stage
-                        )
-                        logger.log_replay_buffer(self.replay_buffer)
-                        logger.log_warmup_new_opponent(opponent_type)
-                        self.warmup(
-                            env,
-                            self.replay_buffer,
-                            self.config.warmup_steps,
-                            self.config.seed,
-                        )
+
+                    base_env, env = env_factory.create_environment(
+                        config=self.config, opponent_type=opponent_type
+                    )
+                    self.replay_buffer.set_stage(opponent_type)
+                    agent.reset_hidden()
+                    logger.log_replay_buffer_stage_change(
+                        self.replay_buffer.current_stage
+                    )
+                    logger.log_replay_buffer(self.replay_buffer)
+                    logger.log_warmup_new_opponent(opponent_type)
+                    stage_seed = self._sample_seed()
+                    self.warmup(
+                        env=env,
+                        replay_buffer=agent.replay_buffer,
+                        steps=self.config.warmup_steps,
+                        seed=stage_seed,
+                        agent=agent,
+                        random_action_prob=getattr(
+                            self.config,
+                            "stage_warmup_random_prob",
+                            0.3,
+                        ),
+                    )
 
                 if (episode + 1) % self.config.save_freq == 0:
                     save_checkpoint(agent, metrics, self.config, episode + 1)

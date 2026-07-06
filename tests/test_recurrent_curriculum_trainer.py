@@ -24,12 +24,16 @@ class RecordingReplay:
     def __init__(self):
         self.episodes = []
         self.current_stage = "easy"
+        self.current_stage_id = 0
 
-    def create_episode_builder(self):
-        return EpisodeBuilder()
+    def create_episode_builder(self, **metadata):
+        return EpisodeBuilder(**metadata)
+
+    def push_episode(self, episode):
+        self.episodes.append(episode)
 
     def push(self, episode):
-        self.episodes.append(episode)
+        raise AssertionError("recurrent trainer must use push_episode")
 
     def set_stage(self, stage):
         self.current_stage = stage
@@ -42,6 +46,12 @@ class RecordingReplay:
 
 
 class FixedActionSpace:
+    def __init__(self):
+        self.seeds = []
+
+    def seed(self, seed):
+        self.seeds.append(seed)
+
     def sample(self):
         return np.array([0.1, 0.2, 0.3], dtype=np.float32)
 
@@ -53,6 +63,7 @@ class ShortEpisodeEnv:
         self.action_space = FixedActionSpace()
         self.episode_length = episode_length
         self.reset_seeds = []
+        self.actions = []
         self.steps = 0
 
     def reset(self, seed=None):
@@ -61,6 +72,7 @@ class ShortEpisodeEnv:
         return np.zeros(2, dtype=np.float32), {}
 
     def step(self, action):
+        self.actions.append(np.asarray(action).copy())
         self.steps += 1
         terminated = self.steps >= self.episode_length
         info = {
@@ -124,7 +136,12 @@ class RecordingAgent:
 
 
 def make_trainer(env, replay, agent):
-    config = SimpleNamespace(episode_length=4, updates_per_step=2)
+    config = SimpleNamespace(
+        episode_length=4,
+        updates_per_step=2,
+        seed=42,
+        eval_seed=None,
+    )
     return RecurrentCurriculumTrainer(
         config=config,
         curriculum_config=SimpleNamespace(),
@@ -147,17 +164,26 @@ class RecurrentCurriculumTrainerTests(unittest.TestCase):
 
         trainer.warmup(env, replay, steps=5, seed=11)
 
+        expected_rng = np.random.default_rng(11)
+        expected_seeds = [
+            int(expected_rng.integers(0, 2**31 - 1)) for _ in range(3)
+        ]
         self.assertEqual([len(ep["obs"]) for ep in replay.episodes], [2, 2, 1])
-        self.assertEqual(env.reset_seeds, [11, 12, 13])
+        self.assertEqual(env.reset_seeds, expected_seeds)
+        self.assertEqual(env.action_space.seeds, expected_seeds)
         self.assertEqual(sum(len(ep["obs"]) for ep in replay.episodes), 5)
         self.assertEqual(float(replay.episodes[-1]["dones"][-1, 0]), 0.0)
+        self.assertEqual(
+            [episode["episode_seed"] for episode in replay.episodes],
+            expected_seeds,
+        )
         np.testing.assert_array_equal(
             replay.episodes[0]["opponent_actions"][0], [-1.0, -1.0, -1.0]
         )
 
     def test_run_episode_updates_only_from_previously_completed_episodes(self):
         replay = RecordingReplay()
-        replay.push({"obs": np.zeros((1, 2), dtype=np.float32)})
+        replay.push_episode({"obs": np.zeros((1, 2), dtype=np.float32)})
         agent = RecordingAgent(replay)
         env = ShortEpisodeEnv(episode_length=2)
         trainer = make_trainer(env, replay, agent)
@@ -171,9 +197,32 @@ class RecurrentCurriculumTrainerTests(unittest.TestCase):
         self.assertEqual(actor_losses, [2.0] * 4)
         self.assertEqual(agent.replay_sizes_during_updates, [1, 1, 1, 1])
         self.assertEqual(len(replay), 2)
+        self.assertEqual(replay.episodes[-1]["opponent_type"], "easy")
+        self.assertEqual(replay.episodes[-1]["stage_id"], 0)
+        self.assertEqual(replay.episodes[-1]["episode_seed"], env.reset_seeds[0])
         np.testing.assert_array_equal(agent.contexts[0][0], np.zeros(3))
         self.assertEqual(agent.contexts[1][1], 0.25)
         np.testing.assert_array_equal(agent.contexts[1][2], [-1.0, -1.0, -1.0])
+
+    def test_stage_warmup_can_mix_policy_actions_and_resets_hidden(self):
+        replay = RecordingReplay()
+        agent = RecordingAgent(replay)
+        env = ShortEpisodeEnv(episode_length=2)
+        trainer = make_trainer(env, replay, agent)
+
+        trainer.warmup(
+            env,
+            replay,
+            steps=3,
+            seed=7,
+            agent=agent,
+            random_action_prob=0.0,
+        )
+
+        for action in env.actions:
+            np.testing.assert_allclose(action, [0.2, 0.3, 0.4])
+        self.assertEqual(len(replay.episodes), 2)
+        self.assertGreaterEqual(agent.reset_calls, 4)
 
     def test_evaluation_is_deterministic_and_does_not_mutate_replay(self):
         replay = RecordingReplay()
@@ -182,7 +231,7 @@ class RecurrentCurriculumTrainerTests(unittest.TestCase):
         trainer = make_trainer(env, replay, agent)
 
         reward, stats = trainer.evaluate_recurrent_agent(
-            env, agent, num_episodes=2, max_steps=4
+            env, agent, num_episodes=2, max_steps=4, opponent_type="easy"
         )
 
         self.assertEqual(reward, 0.5)
@@ -190,6 +239,31 @@ class RecurrentCurriculumTrainerTests(unittest.TestCase):
         self.assertTrue(all(context[3] for context in agent.contexts))
         self.assertEqual(set(stats), {"uniform", "new", "old"})
         self.assertGreaterEqual(agent.reset_calls, 4)
+        self.assertEqual(env.reset_seeds, trainer._get_eval_seeds("easy", 2))
+
+        second_env = ShortEpisodeEnv(episode_length=2)
+        trainer.evaluate_recurrent_agent(
+            second_env, agent, num_episodes=2, max_steps=4, opponent_type="easy"
+        )
+        self.assertEqual(second_env.reset_seeds, env.reset_seeds)
+        self.assertNotEqual(
+            trainer._get_eval_seeds("easy", 2),
+            trainer._get_eval_seeds("hard", 2),
+        )
+
+    def test_training_seed_stream_is_reproducible_but_not_constant(self):
+        first_replay = RecordingReplay()
+        first = make_trainer(
+            ShortEpisodeEnv(), first_replay, RecordingAgent(first_replay)
+        )
+        second_replay = RecordingReplay()
+        second = make_trainer(
+            ShortEpisodeEnv(), second_replay, RecordingAgent(second_replay)
+        )
+        first_seeds = [first._sample_seed() for _ in range(4)]
+        second_seeds = [second._sample_seed() for _ in range(4)]
+        self.assertEqual(first_seeds, second_seeds)
+        self.assertEqual(len(set(first_seeds)), 4)
 
 
 if __name__ == "__main__":

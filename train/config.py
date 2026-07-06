@@ -55,6 +55,9 @@ class TrainingConfig:
     updates_per_step: int = 2
     eval_freq: int = 10
     eval_episodes: int = 5
+    eval_seed: Optional[int] = None
+    eval_seed_count: Optional[int] = None
+    stage_warmup_random_prob: float = 0.3
     
     # Logging
     log_freq: int = 1  # Log every N episodes
@@ -65,3 +68,4 @@ class TrainingConfig:
     verbose : bool = True
     # Paths
     save_dir: str = "experiments/phase2/phase2_1_uniform_training_results"
+    log_dir : str = "experiments/logs"
