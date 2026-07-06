@@ -15,13 +15,14 @@ Classes:
     FixedUniformOpponentPolicy: One randomized price held for an episode
     UniformRandomOpponentPolicy: Episode base price with per-step Gaussian noise
     UniformMyopicOpponent: One-period profit maximization over a price grid
+    UniformUndercutterOpponent: Delayed response below the agent's prior price
     ConstantOpponentPolicy: Fixed prices regardless of state
     Phase1EmpiricalOpponentPolicy: Uses Phase 1 experiment results
     RuleBasedOpponentPolicy: Simple rule-based price adjustments
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any, Sequence
 from dataclasses import dataclass
 import numpy as np
 
@@ -597,6 +598,137 @@ class UniformMyopicOpponent(OpponentPolicy):
         )
 
 
+class UniformUndercutterOpponent(OpponentPolicy):
+    """Undercut an observed agent price after an episode-fixed delay.
+
+    At reset, the policy samples an undercut amount from ``Uniform(0.1, 1.0)``
+    and a reaction delay from ``[1, 2]``. Each step uses the selected delayed
+    agent price minus that amount, clipped to the configured price interval.
+    """
+
+    def __init__(
+        self,
+        p_min: Optional[float] = None,
+        p_max: Optional[float] = None,
+        delta_min: float = 0.1,
+        delta_max: float = 1.0,
+        reaction_delays: Sequence[int] = (1, 2),
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the episode-randomized undercutting opponent.
+
+        Args:
+            p_min: Minimum posted uniform price.
+            p_max: Maximum posted uniform price.
+            delta_min: Minimum episode undercut amount.
+            delta_max: Maximum episode undercut amount.
+            reaction_delays: Candidate delays measured in observed agent prices.
+            bounds: Market price bounds. Defaults to :class:`PriceBounds`.
+            seed: Optional seed controlling episode parameter samples.
+
+        Raises:
+            ValueError: If price, delta, or delay parameters are invalid.
+        """
+        super().__init__(regime=0, bounds=bounds, seed=seed)
+        self.p_min = self.bounds.uniform_min if p_min is None else float(p_min)
+        self.p_max = self.bounds.uniform_max if p_max is None else float(p_max)
+        self.delta_min = float(delta_min)
+        self.delta_max = float(delta_max)
+        self.reaction_delays = tuple(reaction_delays)
+        self._validate_parameters()
+        self._agent_price_history: list[float] = []
+        self._delta = self._sample_delta()
+        self._reaction_delay = self._sample_reaction_delay()
+        self._current_price = self.p_max
+
+    def _validate_parameters(self) -> None:
+        numeric_values = (
+            self.p_min,
+            self.p_max,
+            self.delta_min,
+            self.delta_max,
+        )
+        if not all(np.isfinite(value) for value in numeric_values):
+            raise ValueError("undercutter price and delta parameters must be finite")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min >= self.p_max:
+            raise ValueError("p_min must be less than p_max")
+        if self.delta_min < 0 or self.delta_min >= self.delta_max:
+            raise ValueError("delta bounds must satisfy 0 <= delta_min < delta_max")
+        if not self.reaction_delays:
+            raise ValueError("reaction_delays must not be empty")
+        if any(
+            not isinstance(delay, int)
+            or isinstance(delay, bool)
+            or delay < 1
+            for delay in self.reaction_delays
+        ):
+            raise ValueError("reaction delays must be positive integers")
+
+    def _sample_delta(self) -> float:
+        return float(self.rng.uniform(self.delta_min, self.delta_max))
+
+    def _sample_reaction_delay(self) -> int:
+        return int(self.rng.choice(self.reaction_delays))
+
+    @property
+    def delta(self) -> float:
+        """Undercut amount sampled for the current episode."""
+        return self._delta
+
+    @property
+    def reaction_delay(self) -> int:
+        """Agent-price observation delay sampled for the current episode."""
+        return self._reaction_delay
+
+    @property
+    def current_price(self) -> float:
+        """Most recently posted undercut price."""
+        return self._current_price
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        """Sample episode response parameters and clear agent-price history."""
+        super().reset(seed=seed)
+        self._delta = self._sample_delta()
+        self._reaction_delay = self._sample_reaction_delay()
+        self._agent_price_history = []
+        self._current_price = self.p_max
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        """Undercut the delayed observed agent price and apply price bounds."""
+        observed_agent_price = float(observation.competitor_uniform_price)
+        self._agent_price_history.append(observed_agent_price)
+        history_index = max(
+            len(self._agent_price_history) - self._reaction_delay,
+            0,
+        )
+        delayed_agent_price = self._agent_price_history[history_index]
+        self._current_price = float(
+            np.clip(delayed_agent_price - self._delta, self.p_min, self.p_max)
+        )
+        return self._current_price
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        """Reuse the current undercut price for inactive BBP placeholders."""
+        price_new = float(self.bounds.clip_bbp_new(self._current_price))
+        price_old = float(
+            self.bounds.clip_bbp_old(max(self._current_price, price_new))
+        )
+        return price_new, price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(delta={self._delta:.2f}, "
+            f"reaction_delay={self._reaction_delay}, "
+            f"range=({self.p_min:.2f}, {self.p_max:.2f}), regime=0)"
+        )
+
+
 # =============================================================================
 # CONSTANT OPPONENT POLICY
 # =============================================================================
@@ -906,6 +1038,7 @@ def create_opponent_policy(
         "fixed_uniform": FixedUniformOpponentPolicy,
         "uniform_random": UniformRandomOpponentPolicy,
         "uniform_myopic": UniformMyopicOpponent,
+        "uniform_undercutter": UniformUndercutterOpponent,
         "rule_based": RuleBasedOpponentPolicy,
         "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
@@ -925,6 +1058,14 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+    "uniform_undercutter": {
+        "policy_type": "uniform_undercutter",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "delta_min": 0.1,
+        "delta_max": 1.0,
+        "reaction_delays": (1, 2),
+    },
     "uniform_myopic": {
         "policy_type": "uniform_myopic",
         "p_min": PRICE_UNIFORM_MIN,
