@@ -8,8 +8,13 @@ scheduler:
   max_episodes_per_stage: 500
 
 stages:
-  - {name: premium_uniform, opponent_type: premium_uniform, difficulty: tutorial, description: "Fixed uniform price 3.5, easiest"}
-  - {name: premium_passive_uniform, opponent_type: premium_passive_uniform, difficulty: tutorial, description: "Fixed uniform price 3.0"}
-  - {name: passive_uniform, opponent_type: passive_uniform, difficulty: tutorial, description: "Fixed uniform price 2.5"}
-  - {name: passive_aggressive_uniform, opponent_type: passive_aggressive_uniform, difficulty: tutorial, description: "Fixed uniform price 2.0"}
-  - {name: aggressive_uniform, opponent_type: aggressive_uniform, difficulty: tutorial, description: "Fixed uniform price 1.5, most competitive"}
+  - {name: Uniform Fixed, opponent_type: uniform_fixed, difficulty: tutorial, description: "Opponent posts one fixed price for the whole episode", min_episodes_per_stage : 50, max_episodes_per_stage : 200}
+
+  - {name: Uniform Random, opponent_type: uniform_random, difficulty: tutorial, description: "Opponent samples price randomly every period", min_episodes_per_stage : 50, max_episodes_per_stage : 200}
+  
+  - {name: Uniform Myopic, opponent_type: uniform_myopic, difficulty: easy, description: "Opponent chooses the uniform price that maximizes its one-period expected profit.", min_episodes_per_stage : 100, max_episodes_per_stage : 300}
+
+  - {name: Uniform Undercutter, opponent_type: uniform_undercutter, difficulty: medium, description: "Opponent reacts to your previous price, undercuts the your last price", min_episodes_per_stage : 150, max_episodes_per_stage : 500}
+
+  - {name: Uniform tit for tat, opponent_type: uniform_tit_for_tat, difficulty: hard, description: "Opponent behaves normally unless your agent cuts price aggressively.", min_episodes_per_stage : 200, max_episodes_per_stage : 700}
+    

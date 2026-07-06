@@ -1,0 +1,13 @@
+scheduler:
+  window_size: 20
+  change_threshold: 0.04
+  monitor_critic: true
+  monitor_actor: true
+  monitor_alpha: false
+  min_episodes_per_stage: 100
+  max_episodes_per_stage: 250
+
+stages:
+
+  - {name: Frozen Policy Population, opponent_type: frozen_policy_population, difficulty: hard , description: "This is a population of saved policies."}
+
