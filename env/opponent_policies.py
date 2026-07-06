@@ -12,6 +12,8 @@ Key Design Principles:
 
 Classes:
     OpponentPolicy: Abstract base class
+    FixedUniformOpponentPolicy: One randomized price held for an episode
+    UniformRandomOpponentPolicy: Episode base price with per-step Gaussian noise
     ConstantOpponentPolicy: Fixed prices regardless of state
     Phase1EmpiricalOpponentPolicy: Uses Phase 1 experiment results
     RuleBasedOpponentPolicy: Simple rule-based price adjustments
@@ -365,6 +367,97 @@ class FixedUniformOpponentPolicy(OpponentPolicy):
         )
 
 
+class UniformRandomOpponentPolicy(OpponentPolicy):
+    """Post a noisy uniform price that changes at every market step.
+
+    A base price is sampled once per episode from ``Uniform(p_min, p_max)``.
+    Each call to :meth:`get_uniform_price` then samples independent Gaussian
+    noise and returns ``clip(p_base + noise, p_min, p_max)``. This provides a
+    stochastic curriculum opponent for learning robustness to price noise.
+    """
+
+    def __init__(
+        self,
+        p_min: Optional[float] = None,
+        p_max: Optional[float] = None,
+        sigma: float = 0.25,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the per-step randomized uniform opponent.
+
+        Args:
+            p_min: Minimum base and posted price.
+            p_max: Maximum base and posted price.
+            sigma: Standard deviation of the per-step Gaussian noise.
+            bounds: Market price bounds. Defaults to :class:`PriceBounds`.
+            seed: Optional seed controlling base prices and step noise.
+
+        Raises:
+            ValueError: If the price interval or noise scale is invalid.
+        """
+        super().__init__(regime=0, bounds=bounds, seed=seed)
+        self.p_min = self.bounds.uniform_min if p_min is None else float(p_min)
+        self.p_max = self.bounds.uniform_max if p_max is None else float(p_max)
+        self.sigma = float(sigma)
+        self._validate_parameters()
+        self._base_price = self._sample_base_price()
+        self._current_price = self._base_price
+
+    def _validate_parameters(self) -> None:
+        values = (self.p_min, self.p_max, self.sigma)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("p_min, p_max, and sigma must be finite")
+        if self.p_min < self.bounds.uniform_min or self.p_max > self.bounds.uniform_max:
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min >= self.p_max:
+            raise ValueError("p_min must be less than p_max")
+        if self.sigma < 0:
+            raise ValueError("sigma must be non-negative")
+
+    def _sample_base_price(self) -> float:
+        return float(self.rng.uniform(self.p_min, self.p_max))
+
+    @property
+    def base_price(self) -> float:
+        """Base price sampled for the current episode."""
+        return self._base_price
+
+    @property
+    def current_price(self) -> float:
+        """Most recently posted noisy price."""
+        return self._current_price
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        """Sample a new episode base price and clear the previous step price."""
+        super().reset(seed=seed)
+        self._base_price = self._sample_base_price()
+        self._current_price = self._base_price
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        """Sample and return this step's bounded noisy price."""
+        noise = float(self.rng.normal(loc=0.0, scale=self.sigma))
+        self._current_price = float(
+            np.clip(self._base_price + noise, self.p_min, self.p_max)
+        )
+        return self._current_price
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        """Reuse the current step price without drawing additional noise."""
+        price_new = float(self.bounds.clip_bbp_new(self._current_price))
+        price_old = float(
+            self.bounds.clip_bbp_old(max(self._current_price, price_new))
+        )
+        return price_new, price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(base_price={self._base_price:.2f}, "
+            f"range=({self.p_min:.2f}, {self.p_max:.2f}), "
+            f"sigma={self.sigma:.2f}, regime=0)"
+        )
+
+
 # =============================================================================
 # CONSTANT OPPONENT POLICY
 # =============================================================================
@@ -672,6 +765,7 @@ def create_opponent_policy(
     policies = {
         "constant": ConstantOpponentPolicy,
         "fixed_uniform": FixedUniformOpponentPolicy,
+        "uniform_random": UniformRandomOpponentPolicy,
         "rule_based": RuleBasedOpponentPolicy,
         "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
@@ -691,6 +785,12 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+    "uniform_random": {
+        "policy_type": "uniform_random",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "sigma": 0.25,
+    },
     "uniform_fixed": {
         "policy_type": "fixed_uniform",
         "p_min": PRICE_UNIFORM_MIN,
