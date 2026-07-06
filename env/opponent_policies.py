@@ -6,7 +6,7 @@ a single learning firm against fixed opponent behavior.
 
 Key Design Principles:
 - Opponent does NOT learn or adapt using RL
-- Opponent provides stable, reproducible pricing behavior
+- Opponent provides episode-stable, reproducible pricing behavior
 - Policies are easily swappable for experimentation
 - Clean interface for environment integration
 
@@ -279,6 +279,92 @@ class OpponentPolicy(ABC):
         return f"{self.__class__.__name__}(regime={self.regime})"
 
 
+class FixedUniformOpponentPolicy(OpponentPolicy):
+    """Sample one uniform price per episode and hold it fixed.
+
+    At every reset, the opponent samples
+    ``fixed_price ~ Uniform(p_min + margin, p_max - margin)``. Every action in
+    that episode uses the sampled price. This exposes an agent to varied but
+    stationary competitors, making it suitable for introductory curriculum
+    stages focused on learning demand and profit responses.
+    """
+
+    def __init__(
+        self,
+        p_min: Optional[float] = None,
+        p_max: Optional[float] = None,
+        margin: float = 0.25,
+        bounds: Optional[PriceBounds] = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the episode-randomized uniform opponent.
+
+        Args:
+            p_min: Lower source bound before applying ``margin``.
+            p_max: Upper source bound before applying ``margin``.
+            margin: Distance kept from both ends of the source interval.
+            bounds: Market price bounds. Defaults to :class:`PriceBounds`.
+            seed: Optional seed controlling episode price samples.
+
+        Raises:
+            ValueError: If bounds or margin do not define a valid interval.
+        """
+        super().__init__(regime=0, bounds=bounds, seed=seed)
+        self.p_min = self.bounds.uniform_min if p_min is None else float(p_min)
+        self.p_max = self.bounds.uniform_max if p_max is None else float(p_max)
+        self.margin = float(margin)
+        self._validate_sampling_interval()
+        self._fixed_price = self._sample_fixed_price()
+
+    def _validate_sampling_interval(self) -> None:
+        values = (self.p_min, self.p_max, self.margin)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("p_min, p_max, and margin must be finite")
+        if self.margin < 0:
+            raise ValueError("margin must be non-negative")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min + self.margin >= self.p_max - self.margin:
+            raise ValueError("margin leaves no non-empty price sampling interval")
+
+    def _sample_fixed_price(self) -> float:
+        lower = self.p_min + self.margin
+        upper = self.p_max - self.margin
+        return float(self.rng.uniform(lower, upper))
+
+    @property
+    def fixed_price(self) -> float:
+        """Price posted throughout the current episode."""
+        return self._fixed_price
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        """Start a new episode and sample exactly one new fixed price."""
+        super().reset(seed=seed)
+        self._fixed_price = self._sample_fixed_price()
+
+    def get_uniform_price(self, observation: OpponentObservation) -> float:
+        """Return the current episode's fixed uniform price."""
+        return self._fixed_price
+
+    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
+        """Return bounded placeholders; this policy always uses uniform regime."""
+        price_new = float(self.bounds.clip_bbp_new(self._fixed_price))
+        price_old = float(
+            self.bounds.clip_bbp_old(max(self._fixed_price, price_new))
+        )
+        return price_new, price_old
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(fixed_price={self._fixed_price:.2f}, "
+            f"range=({self.p_min + self.margin:.2f}, "
+            f"{self.p_max - self.margin:.2f}), regime=0)"
+        )
+
+
 # =============================================================================
 # CONSTANT OPPONENT POLICY
 # =============================================================================
@@ -332,7 +418,6 @@ class ConstantOpponentPolicy(OpponentPolicy):
     def __repr__(self) -> str:
         return (f"ConstantOpponentPolicy(uniform={self._uniform_price:.2f}, "
                 f"new={self._price_new:.2f}, old={self._price_old:.2f}, regime={self.regime})")
-
 
 
 
@@ -574,7 +659,8 @@ def create_opponent_policy(
     Factory function to create opponent policies.
     
     Args:
-        policy_type: One of "constant", "phase1", "rule_based"
+        policy_type: Registered policy type such as ``constant``,
+            ``fixed_uniform``, or ``rule_based``.
         **kwargs: Arguments passed to policy constructor
         
     Returns:
@@ -585,7 +671,7 @@ def create_opponent_policy(
     """
     policies = {
         "constant": ConstantOpponentPolicy,
-        
+        "fixed_uniform": FixedUniformOpponentPolicy,
         "rule_based": RuleBasedOpponentPolicy,
         "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
         "rule": RuleBasedOpponentPolicy,
@@ -605,6 +691,18 @@ def create_opponent_policy(
 
 # Common opponent configurations for experiments
 OPPONENT_PRESETS = {
+    "uniform_fixed": {
+        "policy_type": "fixed_uniform",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "margin": 0.25,
+    },
+    "fixed_uniform": {
+        "policy_type": "fixed_uniform",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "margin": 0.25,
+    },
      "premium_uniform": {
         "policy_type": "constant",
         "uniform_price": 3.5,
