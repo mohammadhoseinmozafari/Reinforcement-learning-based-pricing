@@ -66,7 +66,7 @@ class RecurrentCurriculumTrainer:
         self.internal_logger = setup_internal_logger(
             name= f"trainer.{str(run_id)}",
             log_dir= f"log/logs/trainer.{str(run_id)}",
-            level = logging.INFO,
+            level = logging.DEBUG if self.config.verbose else logging.INFO,
             filename="trainer_internal.log"    
 
         )
@@ -192,7 +192,11 @@ class RecurrentCurriculumTrainer:
             return
         if not 0.0 <= random_action_prob <= 1.0:
             raise ValueError("random_action_prob must be in [0, 1]")
-
+        
+        self.internal_logger.info(
+            "Warmup started with seed =%d",
+            seed
+        )
         rng = np.random.default_rng(seed)
         collected = 0
         while collected < steps:

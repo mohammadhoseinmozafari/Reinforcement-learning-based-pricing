@@ -11,7 +11,6 @@ Simplified single-agent environment for learning optimal uniform pricing.
 from typing import Dict, Tuple, Optional, Union
 import numpy as np
 
-from log.internal_logger import setup_internal_logger
 from .type import EnvironmentType
 import gymnasium as gym
 from gymnasium import spaces
@@ -88,13 +87,7 @@ class PricingEnv(gym.Env):
 
 
         self.opponent_policy = opponent_policy
-
-        self.internal_loggr = setup_internal_logger(
-            name = f"environment.{self.environment_type.value}_{self.opponent_policy.__class__.__name__}",
-            log_dir="log/logs/environment_logs/",
-            filename="environment_internal.log"
-
-        )        
+       
         # =====================================
         # ACTION SPACE: Flattened price (uniform_price , price_new , price_old)
         # =====================================
@@ -376,6 +369,7 @@ class PricingEnv(gym.Env):
             "bbp_price_new": initial_bbp_price_new,
             "bbp_price_old" : initial_bbp_price_old
         }
+
         
         return obs, info
     

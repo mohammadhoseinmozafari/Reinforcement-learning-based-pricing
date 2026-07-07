@@ -215,7 +215,7 @@ class OpponentPolicy(ABC):
         self.bounds = bounds or PriceBounds()
         self.seed = seed
         self.rng = np.random.RandomState(seed) if seed is not None else np.random.RandomState()
-    
+
     @abstractmethod
     def get_uniform_price(self, observation: OpponentObservation) -> float:
         """
