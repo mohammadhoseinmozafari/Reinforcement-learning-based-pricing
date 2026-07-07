@@ -12,6 +12,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from env.opponent_policies import (
     OpponentObservation,
+    PreviousMarketState,
+    PriceVector,
     UniformUndercutterOpponent,
     create_opponent_policy,
     create_preset_opponent,
@@ -23,7 +25,11 @@ class UniformUndercutterOpponentTests(unittest.TestCase):
 
     @staticmethod
     def observation(agent_price: float) -> OpponentObservation:
-        return OpponentObservation(competitor_uniform_price=agent_price)
+        return OpponentObservation(
+            previous=PreviousMarketState(
+                competitor_prices=PriceVector(uniform=agent_price)
+            )
+        )
 
     def test_reset_samples_delta_and_delay_reproducibly(self):
         policy = UniformUndercutterOpponent()

@@ -9,6 +9,7 @@ import hashlib
 import random
 
 from typing import TYPE_CHECKING, Dict, List, Tuple
+from uuid import uuid4
 
 import numpy as np
 
@@ -20,6 +21,7 @@ from config.constants import (
     PRICE_UNIFORM_MAX,
     PRICE_UNIFORM_MIN,
 )
+from log.internal_logger import setup_internal_logger
 from models.buffer import CurriculumSequenceReplayBuffer
 from models.recurrent_sac_opponent_embedding import (
     RecurrentSACOpponentEmbeddingAgent,
@@ -48,7 +50,9 @@ class RecurrentCurriculumTrainer:
     ) -> None:
         self.config = config
         self.curriculum_config = curriculum_config
-        
+
+        run_id  = uuid4()
+
         self.env_factory = env_factory
         self.base_env = base_env
         self.env = env
@@ -59,8 +63,14 @@ class RecurrentCurriculumTrainer:
 
         self.rng = np.random.default_rng(self.config.seed)
 
+        self.internal_logger = setup_internal_logger(
+            name= f"trainer.{str(run_id)}",
+            log_dir= f"log/logs/trainer.{str(run_id)}",
+            level = logging.INFO,
+            filename="trainer_internal.log"    
 
-        
+        )
+
         if agent.replay_buffer is None:
             agent.attach_replay_buffer(replay_buffer)
         elif agent.replay_buffer is not replay_buffer:

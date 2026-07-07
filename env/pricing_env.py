@@ -10,6 +10,8 @@ Simplified single-agent environment for learning optimal uniform pricing.
 
 from typing import Dict, Tuple, Optional, Union
 import numpy as np
+
+from log.internal_logger import setup_internal_logger
 from .type import EnvironmentType
 import gymnasium as gym
 from gymnasium import spaces
@@ -19,6 +21,8 @@ from env.models import HotellingMarket
 from env.opponent_policies import (
     OpponentPolicy,
     OpponentObservation,
+    PreviousMarketState,
+    PriceVector,
     
     create_preset_opponent,
 )
@@ -85,7 +89,12 @@ class PricingEnv(gym.Env):
 
         self.opponent_policy = opponent_policy
 
-        
+        self.internal_loggr = setup_internal_logger(
+            name = f"environment.{self.environment_type.value}_{self.opponent_policy.__class__.__name__}",
+            log_dir="log/logs/environment_logs/",
+            filename="environment_internal.log"
+
+        )        
         # =====================================
         # ACTION SPACE: Flattened price (uniform_price , price_new , price_old)
         # =====================================
@@ -247,8 +256,16 @@ class PricingEnv(gym.Env):
         
         return obs
     
-    def _get_opponent_observation(self) -> OpponentObservation:
-        """Create opponent observation from current market state."""
+    def _get_opponent_observation(
+        self,
+        competitor_prices: Optional[Dict[str, float]] = None,
+    ) -> OpponentObservation:
+        """Create the opponent view using current submitted agent prices.
+
+        ``competitor_prices`` is supplied during ``step`` because the market's
+        stored firm prices still describe the previous period until
+        :meth:`HotellingMarket.step` executes.
+        """
         opponent = self.market.firms[1]
         firm = self.market.firms[0]
         
@@ -266,24 +283,41 @@ class PricingEnv(gym.Env):
         
         own_regime = opponent.pricing_regime
         competitor_regime = firm.pricing_regime
+        previous = PreviousMarketState(
+            own_market_share=opp_market_share,
+            competitor_market_share=competitor_market_share,
+            own_prices=PriceVector(
+                uniform=own_uniform_price,
+                new=own_price_new,
+                old=own_price_old,
+            ),
+            competitor_prices=PriceVector(
+                uniform=competitor_uniform_price,
+                new=competitor_bbp_price_new,
+                old=competitor_bbp_price_old,
+            ),
+            own_demand_ratio=(
+                opponent.last_period_quantity / self.num_consumers
+                if self.num_consumers > 0 else 0.5
+            ),
+            own_new_customer_ratio=opponent.get_new_old_ratio(),
+        )
+        submission = (
+            PriceVector(
+                uniform=float(competitor_prices["uniform_price"]),
+                new=float(competitor_prices["price_new"]),
+                old=float(competitor_prices["price_old"]),
+            )
+            if competitor_prices is not None else None
+        )
         return OpponentObservation(
-            market_share=opp_market_share,
-            competitor_market_share= competitor_market_share,
-            own_uniform_price=own_uniform_price,
-            own_price_new = own_price_new,
-            own_price_old = own_price_old,
-
-            competitor_uniform_price=competitor_uniform_price,
-            competitor_price_new= competitor_bbp_price_new,
-            competitor_price_old= competitor_bbp_price_old,
-
-            last_demand_ratio=opponent.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.5,
-            new_old_ratio=opponent.get_new_old_ratio(),
-
+            previous=previous,
+            competitor_submission=submission,
+            competitor_established_share=self.market.get_established_share(0),
             own_regime=own_regime,
             competitor_regime=competitor_regime,
-              
-            timestep=self._timestep,
+            decision_period=self._timestep,
+            state_period=self._timestep - 1,
             episode_length=self.episode_length,
         )
     
@@ -362,28 +396,26 @@ class PricingEnv(gym.Env):
         agent_price = self._action_to_price(action)
         self._last_action = action
 
-        # Get opponent's price from policy
-        opp_obs = self._get_opponent_observation()
-        opp_prices = self.opponent_policy.get_prices(opp_obs)
-
-        
-        # Set prices in market
         agent_prices = {
             "uniform_price": agent_price[0],
             "price_new": agent_price[1],
             "price_old": agent_price[2],
         }
+
+        own_regime = 0 if self.environment_type == "uniform_pricing" else 1
+        self.market.set_regimes(own_regime, self.opponent_policy.regime)
+
+        # The myopic opponent is a within-period follower and therefore sees
+        # the agent's current submitted prices rather than last period's prices.
+        opp_obs = self._get_opponent_observation(agent_prices)
+        opp_prices = self.opponent_policy.get_prices(opp_obs)
+
         opp_prices_dict = {
             "uniform_price": opp_prices.get("uniform_price", opp_prices.get("price_new", 5.0)),
             "price_new": opp_prices.get("price_new", opp_prices.get("uniform_price", 5.0)),
             "price_old": opp_prices.get("price_old", opp_prices.get("price_new", 5.0)),
         }
-        
-        own_regime = 0 if self.environment_type == "uniform_pricing" else 1
 
-        # Ensure uniform regime for agent only
-        self.market.set_regimes(own_regime, self.opponent_policy.regime)
-        
         # Execute market step
         demand_0, demand_1 = self.market.step(agent_prices, opp_prices_dict)
         

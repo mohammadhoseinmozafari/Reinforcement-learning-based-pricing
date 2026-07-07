@@ -16,9 +16,32 @@ from env.opponent_policies import (
     BBPLoyaltyHarvesterOpponent,
     BBPMyopicSegmentOptimizerOpponent,
     OpponentObservation,
+    PreviousMarketState,
+    PriceVector,
     create_opponent_policy,
     create_preset_opponent,
 )
+
+
+def make_bbp_observation(
+    *,
+    competitor_new=1.5,
+    competitor_old=2.5,
+    own_market_share=0.5,
+    new_customer_ratio=0.5,
+    demand_ratio=0.5,
+):
+    return OpponentObservation(
+        previous=PreviousMarketState(
+            own_market_share=own_market_share,
+            competitor_prices=PriceVector(
+                new=competitor_new,
+                old=competitor_old,
+            ),
+            own_new_customer_ratio=new_customer_ratio,
+            own_demand_ratio=demand_ratio,
+        )
+    )
 
 
 class RandomizedBBPOpponentTests(unittest.TestCase):
@@ -107,11 +130,11 @@ class BBPMyopicSegmentOptimizerTests(unittest.TestCase):
         )
 
     def test_selects_global_best_valid_grid_pair(self):
-        observation = OpponentObservation(
-            competitor_price_new=2.0,
-            competitor_price_old=4.0,
-            new_old_ratio=0.4,
-            last_demand_ratio=0.5,
+        observation = make_bbp_observation(
+            competitor_new=2.0,
+            competitor_old=4.0,
+            new_customer_ratio=0.4,
+            demand_ratio=0.5,
         )
         profits = self.policy.expected_profits(observation)
         expected_indices = np.unravel_index(int(np.argmax(profits)), profits.shape)
@@ -133,9 +156,9 @@ class BBPMyopicSegmentOptimizerTests(unittest.TestCase):
         )
 
     def test_invalid_spread_pairs_never_win(self):
-        observation = OpponentObservation(
-            competitor_price_new=5.0,
-            competitor_price_old=1.0,
+        observation = make_bbp_observation(
+            competitor_new=5.0,
+            competitor_old=1.0,
         )
         profits = self.policy.expected_profits(observation)
         new_grid = self.policy.new_candidate_prices[:, None]
@@ -149,28 +172,28 @@ class BBPMyopicSegmentOptimizerTests(unittest.TestCase):
             min_spread=0.75,
             market_state_weight=0.0,
         )
-        mostly_new = OpponentObservation(
-            competitor_price_new=1.0,
-            competitor_price_old=1.0,
-            new_old_ratio=0.9,
-            last_demand_ratio=0.5,
+        mostly_new = make_bbp_observation(
+            competitor_new=1.0,
+            competitor_old=1.0,
+            new_customer_ratio=0.9,
+            demand_ratio=0.5,
         )
-        mostly_old = OpponentObservation(
-            competitor_price_new=1.0,
-            competitor_price_old=1.0,
-            new_old_ratio=0.1,
-            last_demand_ratio=0.5,
+        mostly_old = make_bbp_observation(
+            competitor_new=1.0,
+            competitor_old=1.0,
+            new_customer_ratio=0.1,
+            demand_ratio=0.5,
         )
         new_focused_pair = constrained_policy.get_bbp_prices(mostly_new)
         old_focused_pair = constrained_policy.get_bbp_prices(mostly_old)
         self.assertNotEqual(new_focused_pair, old_focused_pair)
 
     def test_optimizer_is_deterministic_and_bounded(self):
-        observation = OpponentObservation(
-            market_share=0.7,
-            competitor_price_new=2.5,
-            competitor_price_old=4.5,
-            new_old_ratio=0.5,
+        observation = make_bbp_observation(
+            own_market_share=0.7,
+            competitor_new=2.5,
+            competitor_old=4.5,
+            new_customer_ratio=0.5,
         )
         pairs = [self.policy.get_bbp_prices(observation) for _ in range(4)]
         self.assertEqual(pairs, [pairs[0]] * 4)

@@ -806,6 +806,32 @@ class HotellingMarket:
         s1 = self.firms[1].market_share
         return s0**2 + s1**2
 
+    def get_established_share(self, firm_id: int) -> float:
+        """Return the population share established with the selected firm.
+
+        The denominator is the full consumer population, including consumers
+        currently buying from the competitor. This matches the analytical BBP
+        best-response weight used by uniform myopic opponents.
+
+        Args:
+            firm_id: Firm identifier, either 0 or 1.
+
+        Returns:
+            Fraction of consumers established with ``firm_id`` in ``[0, 1]``.
+
+        Raises:
+            ValueError: If ``firm_id`` does not identify a market firm.
+        """
+        if firm_id not in (0, 1):
+            raise ValueError("firm_id must be 0 or 1")
+        if not self.consumers:
+            return 0.0
+        established_count = sum(
+            consumer.is_established_with(firm_id)
+            for consumer in self.consumers
+        )
+        return float(established_count / len(self.consumers))
+
     def reset(self, seed: Optional[int] = None):
         """
         Reset market for new episode.

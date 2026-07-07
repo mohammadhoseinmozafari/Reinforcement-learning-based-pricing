@@ -14,7 +14,7 @@ Classes:
     OpponentPolicy: Abstract base class
     FixedUniformOpponentPolicy: One randomized price held for an episode
     UniformRandomOpponentPolicy: Episode base price with per-step Gaussian noise
-    UniformMyopicOpponent: One-period profit maximization over a price grid
+    UniformMyopicOpponent: Analytical one-period uniform best response
     UniformUndercutterOpponent: Delayed response below the agent's prior price
     UniformTitForTatOpponent: Cooperative pricing with finite retaliation
     BBPFixedDiscriminatorOpponent: Episode-fixed randomized BBP spread
@@ -28,7 +28,7 @@ Classes:
 
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Optional, Any, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 from config.constants import (
@@ -88,42 +88,51 @@ def _bounded_bbp_prices(
     return bounded_new, bounded_old
 
 
-@dataclass
-class OpponentObservation:
-    """
-    Structured observation for opponent policy decision-making.
-    
-    This provides a clean interface for policies to access market state
-    without depending on the raw observation format.
-    """
-    # Market state
-    market_share: float = 0.5
+@dataclass(frozen=True)
+class PriceVector:
+    """Uniform and segmented prices submitted by one firm."""
+
+    uniform: float = 2.0
+    new: float = 1.5
+    old: float = 2.5
+
+
+@dataclass(frozen=True)
+class PreviousMarketState:
+    """Market information produced by the most recently cleared period."""
+
+    own_market_share: float = 0.5
     competitor_market_share: float = 0.5
-    
-    # Price information
-    own_uniform_price: float = 2.0
-    own_price_new: float = 1.5
-    own_price_old: float = 2.5
-    competitor_uniform_price: float = 2.0
-    competitor_price_new: float = 1.5
-    competitor_price_old: float = 2.5
-    
-    # Demand information
-    last_demand_ratio: float = 0.5  # demand / num_consumers
-    new_old_ratio: float = 0.5
-    
-    # Regime information
+    own_prices: PriceVector = field(default_factory=PriceVector)
+    competitor_prices: PriceVector = field(default_factory=PriceVector)
+    own_demand_ratio: float = 0.5
+    own_new_customer_ratio: float = 0.5
+
+
+@dataclass(frozen=True)
+class OpponentObservation:
+    """Information available when the opponent chooses its period-t prices.
+
+    ``previous`` contains outcomes and posted prices from the completed period
+    ``t-1``. ``competitor_submission`` contains the learning agent's submitted
+    period-``t`` prices when the opponent is allowed to observe them. Current
+    demand, profit, and market share are intentionally absent because they do
+    not exist until the market clears.
+    """
+
+    previous: PreviousMarketState = field(default_factory=PreviousMarketState)
+    competitor_submission: Optional[PriceVector] = None
+    competitor_established_share: float = 0.0
     own_regime: int = 0  # 0 = Uniform, 1 = BBP
     competitor_regime: int = 0
-    
-    # Time information
-    timestep: int = 0
+    decision_period: int = 0
+    state_period: int = -1
     episode_length: int = 200
     
     @property
     def time_progress(self) -> float:
         """Episode progress [0, 1]."""
-        return self.timestep / self.episode_length if self.episode_length > 0 else 0.0
+        return self.decision_period / self.episode_length if self.episode_length > 0 else 0.0
     
     @classmethod
     def from_raw_observation(
@@ -145,20 +154,27 @@ class OpponentObservation:
         """
         pc_obs = raw_obs.get("pricing_controller", {})
         
+        own_prices = pc_obs.get("own_prices", [2.0, 1.5, 2.5])
+        competitor_prices = pc_obs.get("comp_prices", [2.0, 1.5, 2.5])
+        own_market_share = float(pc_obs.get("market_share", [0.5])[0])
         return cls(
-            market_share=float(pc_obs.get("market_share", [0.5])[0]),
-            competitor_market_share=1.0 - float(pc_obs.get("market_share", [0.5])[0]),
-            own_uniform_price=float(pc_obs.get("own_prices", [2.0, 1.5, 2.5])[0]),
-            own_price_new=float(pc_obs.get("own_prices", [2.0, 1.5, 2.5])[1]),
-            own_price_old=float(pc_obs.get("own_prices", [2.0, 1.5, 2.5])[2]),
-            competitor_uniform_price=float(pc_obs.get("comp_prices", [2.0, 1.5, 2.5])[0]),
-            competitor_price_new=float(pc_obs.get("comp_prices", [2.0, 1.5, 2.5])[1]),
-            competitor_price_old=float(pc_obs.get("comp_prices", [2.0, 1.5, 2.5])[2]),
-            last_demand_ratio=float(pc_obs.get("last_demand", [0.5])[0]),
-            new_old_ratio=float(pc_obs.get("new_old_ratio", [0.5])[0]),
+            previous=PreviousMarketState(
+                own_market_share=own_market_share,
+                competitor_market_share=1.0 - own_market_share,
+                own_prices=PriceVector(*map(float, own_prices)),
+                competitor_prices=PriceVector(*map(float, competitor_prices)),
+                own_demand_ratio=float(pc_obs.get("last_demand", [0.5])[0]),
+                own_new_customer_ratio=float(
+                    pc_obs.get("new_old_ratio", [0.5])[0]
+                ),
+            ),
+            competitor_established_share=float(
+                pc_obs.get("competitor_established_share", [0.0])[0]
+            ),
             own_regime=int(pc_obs.get("regime", [0])[0]),
             competitor_regime=int(pc_obs.get("competitor_regime", [0])[0]),
-            timestep=timestep,
+            decision_period=timestep,
+            state_period=timestep - 1,
             episode_length=episode_length,
         )
 
@@ -491,61 +507,53 @@ class UniformRandomOpponentPolicy(OpponentPolicy):
 
 
 class UniformMyopicOpponent(OpponentPolicy):
-    """Choose the one-period profit-maximizing uniform grid price.
+    """Choose an analytical one-period best-response uniform price.
 
-    The policy evaluates a fixed grid using a Hotelling demand approximation.
-    Candidate demand combines the static Hotelling cutoff implied by the
-    observed competitor price with the opponent's current market share. It
-    ignores future state changes, so the response remains deliberately myopic.
+    Against a uniform competitor, the response uses its current uniform price.
+    Against a BBP competitor, it uses the established-share-weighted average of
+    the current new- and old-customer prices. The environment supplies current
+    prices, making this policy a Stackelberg follower within each period.
     """
 
     def __init__(
         self,
         p_min: Optional[float] = None,
         p_max: Optional[float] = None,
-        grid_size: int = 25,
         transport_cost: float = TRANSPORTATION_COST,
-        marginal_cost: float = MARGINAL_COST,
-        market_state_weight: float = 0.25,
+        best_response_offset: float = 0.5,
         bounds: Optional[PriceBounds] = None,
         seed: Optional[int] = None,
     ) -> None:
-        """Initialize the short-term rational uniform opponent.
+        """Initialize the analytical short-term rational opponent.
 
         Args:
-            p_min: Minimum candidate price.
-            p_max: Maximum candidate price.
-            grid_size: Number of evenly spaced candidate prices.
+            p_min: Minimum permitted response price.
+            p_max: Maximum permitted response price.
             transport_cost: Hotelling transportation-cost coefficient.
-            marginal_cost: Per-unit marginal cost used in expected profit.
-            market_state_weight: Blend weight for the observed market share.
+            best_response_offset: Constant term in the derived response.
             bounds: Market price bounds. Defaults to :class:`PriceBounds`.
-            seed: Retained for the common policy interface; search is deterministic.
+            seed: Retained for the common policy interface; response is deterministic.
 
         Raises:
-            ValueError: If grid or economic parameters are invalid.
+            ValueError: If bounds or economic parameters are invalid.
         """
         super().__init__(regime=0, bounds=bounds, seed=seed)
         self.p_min = self.bounds.uniform_min if p_min is None else float(p_min)
         self.p_max = self.bounds.uniform_max if p_max is None else float(p_max)
-        self.grid_size = grid_size
         self.transport_cost = float(transport_cost)
-        self.marginal_cost = float(marginal_cost)
-        self.market_state_weight = float(market_state_weight)
+        self.best_response_offset = float(best_response_offset)
         self._validate_parameters()
-        self.candidate_prices = np.linspace(
-            self.p_min, self.p_max, self.grid_size, dtype=np.float64
-        )
-        self._current_price = float(self.candidate_prices[0])
-        self._last_expected_profit = 0.0
+        self._current_price = self.p_min
+        self._effective_competitor_price = 0.0
+        self._last_established_share = 0.0
+        self._last_unclipped_price = self.p_min
 
     def _validate_parameters(self) -> None:
         numeric_values = (
             self.p_min,
             self.p_max,
             self.transport_cost,
-            self.marginal_cost,
-            self.market_state_weight,
+            self.best_response_offset,
         )
         if not all(np.isfinite(value) for value in numeric_values):
             raise ValueError("myopic policy parameters must be finite")
@@ -556,38 +564,8 @@ class UniformMyopicOpponent(OpponentPolicy):
             raise ValueError("p_min and p_max must lie within uniform price bounds")
         if self.p_min >= self.p_max:
             raise ValueError("p_min must be less than p_max")
-        if not isinstance(self.grid_size, int) or isinstance(self.grid_size, bool):
-            raise ValueError("grid_size must be an integer")
-        if self.grid_size < 2:
-            raise ValueError("grid_size must be at least 2")
         if self.transport_cost <= 0:
             raise ValueError("transport_cost must be positive")
-        if not 0.0 <= self.market_state_weight <= 1.0:
-            raise ValueError("market_state_weight must be in [0, 1]")
-
-    def _expected_market_share(
-        self,
-        candidate_prices: np.ndarray,
-        observation: OpponentObservation,
-    ) -> np.ndarray:
-        competitor_price = float(observation.competitor_uniform_price)
-        hotelling_share = 0.5 + (
-            competitor_price - candidate_prices
-        ) / (2.0 * self.transport_cost)
-        observed_share = float(np.clip(observation.market_share, 0.0, 1.0))
-        expected_share = (
-            (1.0 - self.market_state_weight) * hotelling_share
-            + self.market_state_weight * observed_share
-        )
-        return np.clip(expected_share, 0.0, 1.0)
-
-    def expected_profits(self, observation: OpponentObservation) -> np.ndarray:
-        """Return one-period expected profit for every candidate grid price."""
-        expected_share = self._expected_market_share(
-            self.candidate_prices, observation
-        )
-        unit_margin = self.candidate_prices - self.marginal_cost
-        return unit_margin * expected_share
 
     @property
     def current_price(self) -> float:
@@ -595,16 +573,59 @@ class UniformMyopicOpponent(OpponentPolicy):
         return self._current_price
 
     @property
-    def last_expected_profit(self) -> float:
-        """Expected one-period profit of the most recent grid optimum."""
-        return self._last_expected_profit
+    def effective_competitor_price(self) -> float:
+        """Competitor price used by the most recent analytical response."""
+        return self._effective_competitor_price
+
+    @property
+    def last_established_share(self) -> float:
+        """Established-customer share used by the most recent response."""
+        return self._last_established_share
+
+    @property
+    def last_unclipped_price(self) -> float:
+        """Most recent analytical response before applying price bounds."""
+        return self._last_unclipped_price
 
     def get_uniform_price(self, observation: OpponentObservation) -> float:
-        """Search the grid and return its highest-profit candidate."""
-        profits = self.expected_profits(observation)
-        best_index = int(np.argmax(profits))
-        self._current_price = float(self.candidate_prices[best_index])
-        self._last_expected_profit = float(profits[best_index])
+        """Calculate and return the bounded analytical best response."""
+        competitor_regime = float(observation.competitor_regime)
+        if competitor_regime not in (0.0, 1.0):
+            raise ValueError("competitor_regime must be 0 (uniform) or 1 (BBP)")
+
+        if competitor_regime == 0.0:
+            established_share = 0.0
+            prices = (
+                observation.competitor_submission
+                or observation.previous.competitor_prices
+            )
+            effective_price = float(prices.uniform)
+        else:
+            established_share = float(np.clip(
+                observation.competitor_established_share, 0.0, 1.0
+            ))
+            prices = (
+                observation.competitor_submission
+                or observation.previous.competitor_prices
+            )
+            price_new = float(prices.new)
+            price_old = float(prices.old)
+            effective_price = (
+                (1.0 - established_share) * price_new
+                + established_share * price_old
+            )
+        if not np.isfinite(effective_price):
+            raise ValueError("competitor prices must be finite")
+
+        response = (
+            self.transport_cost
+            + effective_price
+            + self.best_response_offset
+        ) / 2.0
+        self._effective_competitor_price = float(effective_price)
+        self._last_established_share = established_share
+        self._last_unclipped_price = float(response)
+        self._current_price = float(np.clip(response, self.p_min, self.p_max))
         return self._current_price
 
     def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
@@ -617,9 +638,9 @@ class UniformMyopicOpponent(OpponentPolicy):
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}(grid_size={self.grid_size}, "
-            f"range=({self.p_min:.2f}, {self.p_max:.2f}), "
-            f"market_state_weight={self.market_state_weight:.2f}, regime=0)"
+            f"{self.__class__.__name__}(range=({self.p_min:.2f}, "
+            f"{self.p_max:.2f}), transport_cost={self.transport_cost:.2f}, "
+            f"best_response_offset={self.best_response_offset:.2f}, regime=0)"
         )
 
 
@@ -726,7 +747,9 @@ class UniformUndercutterOpponent(OpponentPolicy):
 
     def get_uniform_price(self, observation: OpponentObservation) -> float:
         """Undercut the delayed observed agent price and apply price bounds."""
-        observed_agent_price = float(observation.competitor_uniform_price)
+        observed_agent_price = float(
+            observation.previous.competitor_prices.uniform
+        )
         self._agent_price_history.append(observed_agent_price)
         history_index = max(
             len(self._agent_price_history) - self._reaction_delay,
@@ -905,7 +928,7 @@ class UniformTitForTatOpponent(OpponentPolicy):
 
     def get_uniform_price(self, observation: OpponentObservation) -> float:
         """Return a cooperative or punishment price for the current step."""
-        agent_price = float(observation.competitor_uniform_price)
+        agent_price = float(observation.previous.competitor_prices.uniform)
         aggressive_cut = agent_price < self._reference_price - self._threshold
         if self._punishment_remaining == 0 and aggressive_cut:
             self._punishment_remaining = self._punishment_length
@@ -1229,19 +1252,27 @@ class BBPMyopicSegmentOptimizerOpponent(OpponentPolicy):
         """Return expected profit for every new/old candidate combination."""
         new_prices = self.new_candidate_prices[:, None]
         old_prices = self.old_candidate_prices[None, :]
-        observed_share = float(np.clip(observation.market_share, 0.0, 1.0))
+        observed_share = float(np.clip(
+            observation.previous.own_market_share, 0.0, 1.0
+        ))
+        competitor_prices = (
+            observation.competitor_submission
+            or observation.previous.competitor_prices
+        )
         new_share = self._expected_share(
             new_prices,
-            float(observation.competitor_price_new),
+            float(competitor_prices.new),
             observed_share,
         )
         old_share = self._expected_share(
             old_prices,
-            float(observation.competitor_price_old),
+            float(competitor_prices.old),
             observed_share,
         )
-        new_weight = float(np.clip(observation.new_old_ratio, 0.0, 1.0))
-        if observation.last_demand_ratio <= 0:
+        new_weight = float(np.clip(
+            observation.previous.own_new_customer_ratio, 0.0, 1.0
+        ))
+        if observation.previous.own_demand_ratio <= 0:
             new_weight = 0.5
         old_weight = 1.0 - new_weight
         profits = (
@@ -1381,10 +1412,8 @@ OPPONENT_PRESETS = {
         "policy_type": "uniform_myopic",
         "p_min": PRICE_UNIFORM_MIN,
         "p_max": PRICE_UNIFORM_MAX,
-        "grid_size": 25,
         "transport_cost": TRANSPORTATION_COST,
-        "marginal_cost": MARGINAL_COST,
-        "market_state_weight": 0.25,
+        "best_response_offset": 0.5,
     },
     "uniform_random": {
         "policy_type": "uniform_random",
