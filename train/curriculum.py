@@ -127,6 +127,8 @@ class OpponentCurriculumScheduler:
 
         # History
         self.advancement_records: List[Dict]  = []
+        self._is_complete = False
+        self._completion_reason: Optional[str] = None
     
     @property
     def current_stage(self) -> OpponentStage:
@@ -137,11 +139,21 @@ class OpponentCurriculumScheduler:
     def is_last_stage(self) -> bool:
         """Check if currently on the last stage."""
         return self.current_stage_idx >= len(self.config.stages) - 1
+
+    @property
+    def is_complete(self) -> bool:
+        """Whether the final curriculum stage has met its exit condition."""
+        return self._is_complete
+
+    @property
+    def completion_reason(self) -> Optional[str]:
+        """Reason the final stage completed, if the curriculum is finished."""
+        return self._completion_reason
     
     @property
     def progress(self) -> float:
         """Overall curriculum progress [0, 1]."""
-        return self.current_stage_idx / max(len(self.config.stages) - 1, 1)
+        return len(self.advancement_records) / max(len(self.config.stages), 1)
     @property
     def current_opponent(self) -> str:
         """Get opponent type for current stage."""
@@ -221,18 +233,17 @@ class OpponentCurriculumScheduler:
         Returns:
             (should_advance, reason)
         """
-        # Can't advance from last stage
-        if self.is_last_stage:
-            return False, "Already at final stage"
+        if self.is_complete:
+            return False, "Curriculum already complete"
         
         # Check minimum episodes
-        if self.episodes_in_stage < self.config.min_episodes_per_stage:
-            return False, f"Min episodes not met ({self.episodes_in_stage}/{self.config.min_episodes_per_stage})"
+        if self.episodes_in_stage < self.current_stage.min_episodes:
+            return False, f"Min episodes not met ({self.episodes_in_stage}/{self.current_stage.min_episodes})"
         
         # Check maximum episodes (force advance)
-        if (self.config.max_episodes_per_stage is not None and 
-            self.episodes_in_stage >= self.config.max_episodes_per_stage):
-            return True, f"Max episodes reached ({self.episodes_in_stage}/{self.config.max_episodes_per_stage})"
+        if (self.current_stage.max_episodes is not None and
+            self.episodes_in_stage >= self.current_stage.max_episodes):
+            return True, f"Max episodes reached ({self.episodes_in_stage}/{self.current_stage.max_episodes})"
         
         all_stable , status = self._is_all_stable()
         if all_stable:
@@ -249,6 +260,9 @@ class OpponentCurriculumScheduler:
         Returns:
             New stage, or None if cannot advance
         """
+        if self.is_complete:
+            return None
+
         should_adv, reason = self.should_advance()
         
         if not should_adv:
@@ -264,10 +278,28 @@ class OpponentCurriculumScheduler:
         }
         
         self.advancement_records.append(completion_record)
+
+        # The final stage completes the curriculum without moving the index past
+        # the configured stage list. Keep its counters intact for reporting.
+        if self.is_last_stage:
+            self._is_complete = True
+            self._completion_reason = reason
+            if self.config.verbose:
+                print("\n" + "=" * 60)
+                print("🎓 CURRICULUM COMPLETE")
+                print("=" * 60)
+                print(f"  Completed: {completion_record['stage']}")
+                print(f"  Episodes spent: {completion_record['episodes_spent']}")
+                print(f"  Reason: {reason}")
+                print("=" * 60 + "\n")
+            return None
         
         # Advance
         self.current_stage_idx += 1
         self.episodes_in_stage = 0
+        self.critic_losses.clear()
+        self.actor_losses.clear()
+        self.alphas.clear()
         
         
         new_stage = self.current_stage
@@ -326,15 +358,21 @@ class OpponentCurriculumScheduler:
             "episodes_in_stage": self.episodes_in_stage,
             "total_episodes": self.total_episodes,
             "progress": self.progress,
+            "total_stages_completed": len(self.advancement_records),
+            "total_stages": len(self.config.stages),
             "is_last_stage": self.is_last_stage,
+            "is_complete": self.is_complete,
+            "completion_reason": self.completion_reason,
             "convergence_status": {k: v for k, v in status.items()},
         }
     
     def get_summary(self) -> Dict:
         """Get curriculum summary after training."""
         return {
-            "total_stages_completed": self.current_stage_idx,
+            "total_stages_completed": len(self.advancement_records),
             "total_stages": len(self.config.stages),
             "final_stage": self.current_stage.name,
             "final_opponent": self.current_stage.opponent_type,
+            "is_complete": self.is_complete,
+            "completion_reason": self.completion_reason,
         }

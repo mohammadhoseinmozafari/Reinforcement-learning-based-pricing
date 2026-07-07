@@ -251,6 +251,7 @@ class RecurrentCurriculumTrainer:
     ) -> Tuple[float, List[float], List[float]]:
         """Collect one episode, update from prior episodes, then store it."""
         episode_seed = self._sample_seed()
+        print(f"episode seed: {episode_seed} ")
         state, _ = env.reset(seed=episode_seed)
 
         metrics.reset_episode()
@@ -282,6 +283,7 @@ class RecurrentCurriculumTrainer:
                     opponent_action=previous_opponent_action,
                 )
                 next_state, reward, terminated, truncated, info = env.step(action)
+
                 done = bool(terminated or truncated)
                 opponent_action = self._extract_opponent_action(info)
                 builder.append(
@@ -447,6 +449,7 @@ class RecurrentCurriculumTrainer:
         logger.log_start_training()
 
         opponent_type = curriculum.current_stage.opponent_type
+        completed_episodes = 0
         for episode in range(self.config.num_episodes):
             current_stage = curriculum.current_stage
             if current_stage.opponent_type == "mixed":
@@ -462,6 +465,7 @@ class RecurrentCurriculumTrainer:
             episode_reward, critic_losses, actor_losses = self.run_episode(
                 env, agent, metrics
             )
+            completed_episodes = episode + 1
             metrics.end_episode(episode_reward)
             has_updates = bool(critic_losses)
             avg_critic = float(np.mean(critic_losses)) if has_updates else 0.0
@@ -474,7 +478,7 @@ class RecurrentCurriculumTrainer:
                 # Replay-fill episodes intentionally do not advance the scheduler.
                 curriculum.step(avg_critic, avg_actor, agent.alpha)
 
-            if (episode + 1) % self.config.eval_freq == 0:
+            if completed_episodes % self.config.eval_freq == 0:
                 eval_episode_count = (
                     getattr(self.config, "eval_seed_count", None)
                     or self.config.eval_episodes
@@ -497,48 +501,55 @@ class RecurrentCurriculumTrainer:
                     self.config,
                 )
 
-                new_opponent = curriculum.advance() if has_updates else None
-                if new_opponent is not None:
-                    logger.log_stage_transition(new_opponent)
-                    base_env.close()
-                    if new_opponent.opponent_type == "mixed":
-                        assert new_opponent.opponent_types
-                        logger.log_mixed_stage_entry(new_opponent.opponent_types)
-                        opponent_type = str(
-                            self.rng.choice(new_opponent.opponent_types)
-                        )
-                    else:
-                        opponent_type = new_opponent.opponent_type
+            # Replay-fill episodes do not count, but every episode that
+            # produced recurrent updates checks the stage exit condition.
+            new_opponent = curriculum.advance() if has_updates else None
+            if new_opponent is not None:
+                logger.log_stage_transition(new_opponent)
+                base_env.close()
+                if new_opponent.opponent_type == "mixed":
+                    assert new_opponent.opponent_types
+                    logger.log_mixed_stage_entry(new_opponent.opponent_types)
+                    opponent_type = str(
+                        self.rng.choice(new_opponent.opponent_types)
+                    )
+                else:
+                    opponent_type = new_opponent.opponent_type
 
-                    base_env, env = env_factory.create_environment(
-                        config=self.config, opponent_type=opponent_type
-                    )
-                    self.replay_buffer.set_stage(opponent_type)
-                    agent.reset_hidden()
-                    logger.log_replay_buffer_stage_change(
-                        self.replay_buffer.current_stage
-                    )
-                    logger.log_replay_buffer(self.replay_buffer)
-                    logger.log_warmup_new_opponent(opponent_type)
-                    stage_seed = self._sample_seed()
-                    self.warmup(
-                        env=env,
-                        replay_buffer=agent.replay_buffer,
-                        steps=self.config.warmup_steps,
-                        seed=stage_seed,
-                        agent=agent,
-                        random_action_prob=getattr(
-                            self.config,
-                            "stage_warmup_random_prob",
-                            0.3,
-                        ),
-                    )
+                base_env, env = env_factory.create_environment(
+                    config=self.config, opponent_type=opponent_type
+                )
+                self.replay_buffer.set_stage(opponent_type)
+                agent.reset_hidden()
+                logger.log_replay_buffer_stage_change(
+                    self.replay_buffer.current_stage
+                )
+                logger.log_replay_buffer(self.replay_buffer)
+                logger.log_warmup_new_opponent(opponent_type)
+                stage_seed = self._sample_seed()
+                self.warmup(
+                    env=env,
+                    replay_buffer=agent.replay_buffer,
+                    steps=self.config.warmup_steps,
+                    seed=stage_seed,
+                    agent=agent,
+                    random_action_prob=getattr(
+                        self.config,
+                        "stage_warmup_random_prob",
+                        0.3,
+                    ),
+                )
 
-                if (episode + 1) % self.config.save_freq == 0:
-                    save_checkpoint(agent, metrics, self.config, episode + 1)
+            if completed_episodes % self.config.save_freq == 0:
+                save_checkpoint(
+                    agent, metrics, self.config, completed_episodes
+                )
+
+            if curriculum.is_complete:
+                break
 
         save_checkpoint(
-            agent, metrics, self.config, self.config.num_episodes, final=True
+            agent, metrics, self.config, completed_episodes, final=True
         )
         env.close()
         return agent, metrics
