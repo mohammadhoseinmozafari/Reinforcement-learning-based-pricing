@@ -345,20 +345,6 @@ class FixedUniformOpponentPolicy(OpponentPolicy):
         self._validate_sampling_interval()
         self._fixed_price = self._sample_fixed_price()
 
-    def _validate_sampling_interval(self) -> None:
-        values = (self.p_min, self.p_max, self.margin)
-        if not all(np.isfinite(value) for value in values):
-            raise ValueError("p_min, p_max, and margin must be finite")
-        if self.margin < 0:
-            raise ValueError("margin must be non-negative")
-        if (
-            self.p_min < self.bounds.uniform_min
-            or self.p_max > self.bounds.uniform_max
-        ):
-            raise ValueError("p_min and p_max must lie within uniform price bounds")
-        if self.p_min + self.margin >= self.p_max - self.margin:
-            raise ValueError("margin leaves no non-empty price sampling interval")
-
     def _sample_fixed_price(self) -> float:
         lower = self.p_min + self.margin
         upper = self.p_max - self.margin
@@ -386,6 +372,21 @@ class FixedUniformOpponentPolicy(OpponentPolicy):
         )
         return price_new, price_old
 
+
+    def _validate_sampling_interval(self) -> None:
+        values = (self.p_min, self.p_max, self.margin)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("p_min, p_max, and margin must be finite")
+        if self.margin < 0:
+            raise ValueError("margin must be non-negative")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min + self.margin >= self.p_max - self.margin:
+            raise ValueError("margin leaves no non-empty price sampling interval")
+    
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(fixed_price={self._fixed_price:.2f}, "
@@ -431,19 +432,6 @@ class UniformRandomOpponentPolicy(OpponentPolicy):
         self._base_price = self._sample_base_price()
         self._current_price = self._base_price
 
-    def _validate_parameters(self) -> None:
-        values = (self.p_min, self.p_max, self.sigma)
-        if not all(np.isfinite(value) for value in values):
-            raise ValueError("p_min, p_max, and sigma must be finite")
-        if (
-            self.p_min < self.bounds.uniform_min
-            or self.p_max > self.bounds.uniform_max
-        ):
-            raise ValueError("p_min and p_max must lie within uniform price bounds")
-        if self.p_min >= self.p_max:
-            raise ValueError("p_min must be less than p_max")
-        if self.sigma < 0:
-            raise ValueError("sigma must be non-negative")
 
     def _sample_base_price(self) -> float:
         return float(self.rng.uniform(self.p_min, self.p_max))
@@ -479,6 +467,20 @@ class UniformRandomOpponentPolicy(OpponentPolicy):
             self.bounds.clip_bbp_old(max(self._current_price, price_new))
         )
         return price_new, price_old
+
+    def _validate_parameters(self) -> None:
+        values = (self.p_min, self.p_max, self.sigma)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("p_min, p_max, and sigma must be finite")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min >= self.p_max:
+            raise ValueError("p_min must be less than p_max")
+        if self.sigma < 0:
+            raise ValueError("sigma must be non-negative")
 
     def __repr__(self) -> str:
         return (
@@ -1275,287 +1277,6 @@ class BBPMyopicSegmentOptimizerOpponent(OpponentPolicy):
         )
 
 
-# =============================================================================
-# CONSTANT OPPONENT POLICY
-# =============================================================================
-
-class ConstantOpponentPolicy(OpponentPolicy):
-    """
-    Opponent that always returns fixed prices.
-    
-    Simple baseline opponent that ignores market state entirely.
-    Useful for:
-    - Testing basic learning agent behavior
-    - Establishing performance baselines
-    - Debugging environment mechanics
-    """
-    
-    def __init__(
-        self,
-        uniform_price: float = 2.5,
-        price_new: float = 2.0,
-        price_old: float = 3.0,
-        regime: int = 0,
-        bounds: Optional[PriceBounds] = None,
-        seed: Optional[int] = None
-    ):
-        """
-        Initialize constant opponent.
-        
-        Args:
-            uniform_price: Fixed uniform price
-            price_new: Fixed BBP price for new customers
-            price_old: Fixed BBP price for established customers
-            regime: Pricing regime (0 = Uniform, 1 = BBP)
-            bounds: Price bounds
-            seed: Random seed (unused but kept for interface consistency)
-        """
-        super().__init__(regime=regime, bounds=bounds, seed=seed)
-        
-        # Store fixed prices (clipped to bounds)
-        self._uniform_price = self.bounds.clip_uniform(uniform_price)
-        self._price_new = self.bounds.clip_bbp_new(price_new)
-        self._price_old = self.bounds.clip_bbp_old(max(price_old, price_new))
-    
-    def get_uniform_price(self, observation: OpponentObservation) -> float:
-        """Return fixed uniform price."""
-        return self._uniform_price
-    
-    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
-        """Return fixed BBP prices."""
-        return self._price_new, self._price_old
-    
-    def __repr__(self) -> str:
-        return (f"ConstantOpponentPolicy(uniform={self._uniform_price:.2f}, "
-                f"new={self._price_new:.2f}, old={self._price_old:.2f}, regime={self.regime})")
-
-
-
-# =============================================================================
-# RULE-BASED OPPONENT POLICY
-# =============================================================================
-
-class RuleBasedOpponentPolicy(OpponentPolicy):
-    """
-    Opponent that adjusts prices based on simple market rules.
-    
-    Implements deterministic price adjustments based on:
-    - Market share (if losing share, lower prices)
-    - Competitor prices (price matching with offset)
-    
-    All adjustments are bounded and use small step sizes to maintain
-    stability for the learning agent.
-    
-    Rules are intentionally simple and DO NOT involve any learning.
-    """
-    
-    def __init__(
-        self,
-        base_uniform_price: float = 2.5,
-        base_price_new: float = 2.0,
-        base_price_old: float = 3.0,
-        regime: int = 0,
-        # Adjustment parameters
-        market_share_sensitivity: float = 0.5,
-        price_step: float = 0.5,
-        target_market_share: float = 0.5,
-        # Price matching parameters
-        enable_price_matching: bool = False,
-        price_matching_offset: float = -0.1,
-        bounds: Optional[PriceBounds] = None,
-        seed: Optional[int] = None
-    ):
-        """
-        Initialize rule-based opponent.
-        
-        Args:
-            base_uniform_price: Starting uniform price
-            base_price_new: Starting BBP new price
-            base_price_old: Starting BBP old price
-            regime: Pricing regime (0 = Uniform, 1 = BBP)
-            market_share_sensitivity: How much to adjust based on market share [0, 1]
-            price_step: Maximum price adjustment per step
-            target_market_share: Target market share (adjusts prices to achieve)
-            enable_price_matching: Whether to match competitor prices
-            price_matching_offset: Offset from competitor price (negative = undercut)
-            bounds: Price bounds
-            seed: Random seed
-        """
-        super().__init__(regime=regime, bounds=bounds, seed=seed)
-        
-        # Base prices
-        self._base_uniform = self.bounds.clip_uniform(base_uniform_price)
-        self._base_new = self.bounds.clip_bbp_new(base_price_new)
-        self._base_old = self.bounds.clip_bbp_old(base_price_old)
-        
-        # Adjustment parameters
-        self.market_share_sensitivity = np.clip(market_share_sensitivity, 0.0, 1.0)
-        self.price_step = abs(price_step)
-        print(self.price_step)
-        self.target_market_share = np.clip(target_market_share, 0.0, 1.0)
-        
-        # Price matching
-        self.enable_price_matching = enable_price_matching
-        self.price_matching_offset = price_matching_offset
-    
-    def _compute_market_share_adjustment(self, observation: OpponentObservation) -> float:
-        """
-        Compute price adjustment based on market share.
-        
-        If below target: lower prices (negative adjustment)
-        If above target: raise prices (positive adjustment)
-        
-        Args:
-            observation: Current market observation
-            
-        Returns:
-            Price adjustment factor
-        """
-        share_diff = observation.market_share - self.target_market_share
-        
-        # Scale adjustment by sensitivity and step size
-        adjustment = share_diff * self.market_share_sensitivity * self.price_step
-        
-        # Bound adjustment to prevent extreme swings
-        return np.clip(adjustment, -self.price_step, self.price_step)
-    
-    def get_uniform_price(self, observation: OpponentObservation) -> float:
-        """
-        Get uniform price with rule-based adjustments.
-        
-        Args:
-            observation: Current market observation
-            
-        Returns:
-            Adjusted uniform price
-        """
-        price = self._base_uniform
-        
-        # Apply market share adjustment
-        adjustment = self._compute_market_share_adjustment(observation)
-        price += adjustment
-        
-        # Optional: price matching
-        if self.enable_price_matching:
-            competitor_price = observation.competitor_uniform_price
-            matched_price = competitor_price + self.price_matching_offset
-            # Blend base price with matched price
-            price = 0.7 * price + 0.3 * matched_price
-        
-        return self.bounds.clip_uniform(price)
-    
-    def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
-        """
-        Get BBP prices with rule-based adjustments.
-        
-        Args:
-            observation: Current market observation
-            
-        Returns:
-            Tuple of (price_new, price_old)
-        """
-        adjustment = self._compute_market_share_adjustment(observation)
-        
-        price_new = self._base_new + adjustment
-        price_old = self._base_old + adjustment
-        
-        # Optional: price matching for BBP
-        if self.enable_price_matching:
-            matched_new = observation.competitor_price_new + self.price_matching_offset
-            matched_old = observation.competitor_price_old + self.price_matching_offset
-            price_new = 0.7 * price_new + 0.3 * matched_new
-            price_old = 0.7 * price_old + 0.3 * matched_old
-        
-        price_new = self.bounds.clip_bbp_new(price_new)
-        price_old = self.bounds.clip_bbp_old(price_old)
-        price_old = max(price_old, price_new)
-        
-        return price_new, price_old
-
-class RandomizedRuleBasedOpponentPolicy(RuleBasedOpponentPolicy):
-    """
-    A reactive opponent whose base prices are randomized each episode.
-    
-    On each reset(), a new base_uniform_price is sampled from a given range.
-    Optionally, other parameters like sensitivity and price_step can also
-    be randomized for even broader domain randomization.
-    """
-    def __init__(
-        self,
-        base_uniform_range=(0.5, 5.0),
-        base_price_new_factor=0.8,          # new price = factor * base_uniform
-        base_price_old_factor=1.2,          # old price = factor * base_uniform
-        regime=0,
-        market_share_sensitivity=1.0,
-        price_step=1.0,
-        # If you want to randomize sensitivity/step as well, provide ranges:
-        sensitivity_range=None,             # e.g., (0.5, 1.5)
-        step_range=None,                    # e.g., (0.5, 1.5)
-        enable_price_matching=False,
-        price_matching_offset=-0.1,
-        bounds=None,
-        seed=None,
-    ):
-        """
-        Args:
-            base_uniform_range: (min, max) for uniform base price.
-            base_price_new_factor: multiplier for new price relative to base.
-            base_price_old_factor: multiplier for old price relative to base.
-            sensitivity_range: optional (min, max) to randomize sensitivity.
-            step_range: optional (min, max) to randomize price_step.
-            (Other args same as RuleBasedOpponentPolicy)
-        """
-        self.base_uniform_range = base_uniform_range
-        self.base_price_new_factor = base_price_new_factor
-        self.base_price_old_factor = base_price_old_factor
-        self.sensitivity_range = sensitivity_range
-        self.step_range = step_range
-
-        # We'll start with a dummy base price, reset will override it.
-        # Call parent with dummy values; reset will reinitialize internal fields.
-        super().__init__(
-            base_uniform_price=np.mean(base_uniform_range),
-            base_price_new=np.mean(base_uniform_range)*base_price_new_factor,
-            base_price_old=np.mean(base_uniform_range)*base_price_old_factor,
-            regime=regime,
-            market_share_sensitivity=market_share_sensitivity,
-            price_step=price_step,
-            enable_price_matching=enable_price_matching,
-            price_matching_offset=price_matching_offset,
-            bounds=bounds,
-            seed=seed,
-        )
-
-    def reset(self, seed=None):
-        """Randomize parameters for a new episode, then call parent reset."""
-        if seed is not None:
-            self.rng = np.random.RandomState(seed)
-
-        # Randomize base prices
-        base_uniform = self.rng.uniform(*self.base_uniform_range)
-        self._base_uniform = self.bounds.clip_uniform(base_uniform)
-        self._base_new = self.bounds.clip_bbp_new(base_uniform * self.base_price_new_factor)
-        self._base_old = self.bounds.clip_bbp_old(max(
-            base_uniform * self.base_price_old_factor,
-            self._base_new
-        ))
-
-        # Optional: randomize sensitivity
-        if self.sensitivity_range is not None:
-            self.market_share_sensitivity = self.rng.uniform(*self.sensitivity_range)
-
-        # Optional: randomize price step
-        if self.step_range is not None:
-            self.price_step = self.rng.uniform(*self.step_range)
-
-        # Call parent reset to reseed the RNG if needed (but we already handled seed)
-        super().reset(seed=seed)
-    def __repr__(self) -> str:
-        return (f"{self.__class__.__name__}(regime={self.regime})"
-                f"(uniform range= {self.base_uniform_range})"
-                f"(market share sensitivity= {self.market_share_sensitivity})"
-                f"(price step = {self.price_step})")
-
 
 # =============================================================================
 # FACTORY FUNCTIONS
@@ -1580,7 +1301,6 @@ def create_opponent_policy(
         ValueError: If policy_type is unknown
     """
     policies = {
-        "constant": ConstantOpponentPolicy,
         "fixed_uniform": FixedUniformOpponentPolicy,
         "uniform_random": UniformRandomOpponentPolicy,
         "uniform_myopic": UniformMyopicOpponent,
@@ -1590,9 +1310,6 @@ def create_opponent_policy(
         "bbp_acquisition_predator": BBPAcquisitionPredatorOpponent,
         "bbp_loyalty_harvester": BBPLoyaltyHarvesterOpponent,
         "bbp_myopic_segment_optimizer": BBPMyopicSegmentOptimizerOpponent,
-        "rule_based": RuleBasedOpponentPolicy,
-        "randomized_rule_based" : RandomizedRuleBasedOpponentPolicy,
-        "rule": RuleBasedOpponentPolicy,
     }
     
     policy_type = policy_type.lower()
@@ -1681,157 +1398,6 @@ OPPONENT_PRESETS = {
         "p_max": PRICE_UNIFORM_MAX,
         "margin": 0.25,
     },
-    "fixed_uniform": {
-        "policy_type": "fixed_uniform",
-        "p_min": PRICE_UNIFORM_MIN,
-        "p_max": PRICE_UNIFORM_MAX,
-        "margin": 0.25,
-    },
-     "premium_uniform": {
-        "policy_type": "constant",
-        "uniform_price": 3.5,
-        "price_new": 3.0,
-        "price_old": 4.0,
-        "regime": 0,
-    },
-    "premium_passive_uniform": {
-        "policy_type": "constant",
-        "uniform_price": 3.0,
-        "price_new": 2.5,
-        "price_old": 3.5,
-        "regime": 0,
-    },
-    "passive_uniform": {
-        "policy_type": "constant",
-        "uniform_price": 2.5,
-        "price_new": 2.0,
-        "price_old": 3.0,
-        "regime": 0,
-    },
-
-    "passive_aggressive_uniform": {
-        "policy_type": "constant",
-        "uniform_price": 2.0,
-        "price_new": 1.5,
-        "price_old": 2.5,
-        "regime": 0,
-    },
-
-    "aggressive_uniform": {
-        "policy_type": "constant",
-        "uniform_price": 1.5,
-        "price_new": 1.2,
-        "price_old": 2.0,
-        "regime": 0,
-    },
-
-
-
-    "premium_bbp": {
-        "policy_type": "constant",
-        "uniform_price": 3.5,
-        "price_new": 3.0,
-        "price_old": 4.0,
-        "regime": 1,
-    },
-
-    "premium_passive_bbp": {
-        "policy_type": "constant",
-        "uniform_price": 3.0,
-        "price_new": 2.5,
-        "price_old": 3.5,
-        "regime": 1,
-    },
-    "passive_bbp": {
-        "policy_type": "constant",
-        "uniform_price": 2.5,
-        "price_new": 2.0,
-        "price_old": 3.0,
-        "regime": 1,
-    },
-
-    "passive_aggressive_bbp": {
-        "policy_type": "constant",
-        "uniform_price": 2.0,
-        "price_new": 1.5,
-        "price_old": 2.5,
-        "regime": 1,
-    },
-
-    "aggressive_bbp": {
-        "policy_type": "constant",
-        "uniform_price": 1.5,
-        "price_new": 1.0,
-        "price_old": 2.0,
-        "regime": 1,
-    },
-    
-
-
-    
-    "premium_random_reactive_uniform":{
-        "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(3.5, 5.0),
-        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
-        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
-        "regime":0,
-        "sensitivity_range" :(0.0, 0.3),
-        "step_range" :(0,0.5),
-    },
-
-    "passive_random_reactive_uniform":{
-        "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(2.0, 3.5),
-        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
-        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
-        "regime":0,
-        "sensitivity_range" :(0.3, 0.6),
-        "step_range" :(0,0.5),
-    },
-
-    
-    "aggressive_random_reactive_uniform":{
-        "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(0.5, 2.0),
-        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
-        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
-        "regime":0,
-        "sensitivity_range" :(0.6 ,1.0),
-        "step_range" :(0,0.5),
-    },
-
-     "premium_random_reactive_bbp":{
-        "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(3.5, 5.0),
-        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
-        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
-        "regime":1,
-        "sensitivity_range" :(0.0, 0.3),
-        "step_range" :(0,0.5),
-    },
-
-    "passive_random_reactive_bbp":{
-        "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(2.0, 3.5),
-        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
-        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
-        "regime":1,
-        "sensitivity_range" :(0.3, 0.6),
-        "step_range" :(0,0.5),
-    },
-
-    
-    "aggressive_random_reactive_bbp":{
-        "policy_type" : "randomized_rule_based",
-        "base_uniform_range" :(0.5, 2.0),
-        "base_price_new_factor": 0.8,          # new price = factor * base_uniform
-        "base_price_old_factor" :1.2,          # old price = factor * base_uniform
-        "regime":1,
-        "sensitivity_range" :(0.6 ,1.0),
-        "step_range" :(0,0.5),
-    },
-
-    
 
 }
 

@@ -325,14 +325,6 @@ def _validate_curriculum(config: CurriculumConfig, path: Path) -> None:
         raise ExperimentConfigError(f"{path}: window_size must be greater than 1")
     if config.change_threshold < 0:
         raise ExperimentConfigError(f"{path}: change_threshold cannot be negative")
-    if config.min_episodes_per_stage <= 0:
-        raise ExperimentConfigError(f"{path}: min_episodes_per_stage must be positive")
-    if (config.max_episodes_per_stage is not None and
-            config.max_episodes_per_stage < config.min_episodes_per_stage):
-        raise ExperimentConfigError(
-            f"{path}: max_episodes_per_stage cannot be below the minimum"
-        )
-
 
 def load_experiment(
     path: str | Path,

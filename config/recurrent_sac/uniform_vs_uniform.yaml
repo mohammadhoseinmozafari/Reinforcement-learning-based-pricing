@@ -2,4 +2,4 @@ name: recurrent_sac_uniform_vs_uniform
 agent_strategy: uniform_pricing
 training_config: ../training/recurrent_sac.yaml
 curriculum_config: ../curricula/uniform.yaml
-save_dir: experiments/recurrent_sac/uniform_vs_uniform/runs/1
+save_dir: experiments/recurrent_sac/uniform_vs_uniform/runs/2

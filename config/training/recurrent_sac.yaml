@@ -17,7 +17,7 @@ agent:
   log_std_max: 0.1
   buffer_size: 100000
   batch_size: 32
-  device: "cuda"
+  device: null
   lr_scheduler: null
   lr_scheduler_kwargs: null
   sequence_length: 16

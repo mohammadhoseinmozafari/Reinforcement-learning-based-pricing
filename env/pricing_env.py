@@ -19,7 +19,7 @@ from env.models import HotellingMarket
 from env.opponent_policies import (
     OpponentPolicy,
     OpponentObservation,
-    ConstantOpponentPolicy,
+    
     create_preset_opponent,
 )
 from config.constants import (
@@ -57,7 +57,7 @@ class PricingEnv(gym.Env):
     def __init__(
         self,
         environment_type : EnvironmentType,
-        opponent_policy: Optional[OpponentPolicy] = None,
+        opponent_policy: OpponentPolicy,
         num_consumers: int = NUM_CONSUMERS,
         episode_length: int = EPISODE_LENGTH,
         seed: Optional[int] = RANDOM_SEED,
@@ -82,13 +82,8 @@ class PricingEnv(gym.Env):
         self.market = HotellingMarket(num_consumers=num_consumers, seed=seed)
         
 
-        if opponent_policy is None:
-            self.opponent_policy = ConstantOpponentPolicy(
-                uniform_price=3.5,
-                regime=0  # Always uniform
-            )
-        else:
-            self.opponent_policy = opponent_policy
+
+        self.opponent_policy = opponent_policy
 
         
         # =====================================
@@ -315,7 +310,7 @@ class PricingEnv(gym.Env):
         self.market.reset(seed=self.seed_value)
         
         own_regime = 0 if self.environment_type == "uniform_pricing" else 1
-        # Force agent to uniform regime
+
         self.market.set_regimes(own_regime, self.opponent_policy.regime)
         
         # Reset opponent policy
