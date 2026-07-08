@@ -419,10 +419,14 @@ class PricingEnv(gym.Env):
         # Get reward (profit)
         own_profit = float(self.market.firms[0].last_period_profit)
         opponent_profit = float(self.market.firms[1].last_period_profit)
-        reward = own_profit + 0.1 * (own_profit - opponent_profit)
+        
+        if own_profit - opponent_profit > 0:
 
+            reward =  10 * (own_profit - opponent_profit)
+        else :
+            reward = (own_profit - opponent_profit)
         # Track metrics
-        self._episode_profits.append(reward)
+        self._episode_profits.append(own_profit)
         self._episode_prices.append(agent_price)
         self._episode_market_shares.append(self.market.firms[0].market_share)
         
@@ -436,7 +440,7 @@ class PricingEnv(gym.Env):
         # Build info dict
         info = {
             "timestep": self._timestep,
-            "profit": reward,
+            "profit": own_profit,
             
             "uniform_price": float(agent_price[0]),
             "bbp_price_new" : float(agent_price[1]),

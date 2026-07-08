@@ -7,14 +7,14 @@ agent:
   lr_actor: 0.0005
   lr_critic: 0.0005
   lr_encoder: 0.0003
-  lr_alpha: 0.0001
+  lr_alpha: 0.00003
   target_entropy: -0.5
-  gamma: 0.9
+  gamma: 0.999
   tau: 0.005
   auto_alpha: true
   alpha: 1.0
-  log_std_min: -10.0
-  log_std_max: 0.1
+  log_std_min: -5.0
+  log_std_max: 1
   buffer_size: 100000
   batch_size: 32
   device: null
@@ -23,18 +23,18 @@ agent:
   sequence_length: 16
   episode_buffer_capacity: 1000
   opponent_action_dim: 3
-  opponent_embedding_dim: 32
+  opponent_embedding_dim: 128
   encoder_hidden_dim: 128
   actor_hidden_dim: 128
   critic_hidden_dim: 128
-  opponent_aux_loss_weight: 1.0
+  opponent_aux_loss_weight: 0.5
   grad_clip_norm: 10.0
-  min_episodes_before_update: 64
+  min_episodes_before_update: 256
   current_stage_weight: 0.75
 
 training:
-  num_episodes: 3000
-  warmup_steps: 500
+  num_episodes: 5000
+  warmup_steps: 1000
   updates_per_step: 1
   stage_warmup_random_prob: 0.3
 
