@@ -33,7 +33,7 @@ agent:
   current_stage_weight: 0.75
 
 training:
-  num_episodes: 2500
+  num_episodes: 3000
   warmup_steps: 500
   updates_per_step: 1
   stage_warmup_random_prob: 0.3

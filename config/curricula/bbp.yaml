@@ -8,7 +8,7 @@ scheduler:
   max_episodes_per_stage: 250
 
 stages:
-  - {name: BBP Fixed Discriminator, opponent_type: bbp_fixed_discriminator, difficulty: tutorial, description: "Opponent uses a fixed BBP spread for the whole episode." , min_episodes_per_stage : 200 , max_episodes_per_stage: 400}
+  - {name: BBP Fixed Discriminator, opponent_type: bbp_fixed_discriminator, difficulty: tutorial, description: "Opponent uses a fixed BBP spread for the whole episode." , min_episodes_per_stage : 300 , max_episodes_per_stage: 500}
 
   - {name: BBP Acquisition Predator, opponent_type: bbp_acquisition_predator, difficulty: medium, description: "Opponent aggressively discounts new customers to grow its customer base.", min_episodes_per_stage : 300 , max_episodes_per_stage: 800}
 

@@ -688,33 +688,6 @@ class UniformUndercutterOpponent(OpponentPolicy):
         self._reaction_delay = self._sample_reaction_delay()
         self._current_price = self.p_max
 
-    def _validate_parameters(self) -> None:
-        numeric_values = (
-            self.p_min,
-            self.p_max,
-            self.delta_min,
-            self.delta_max,
-        )
-        if not all(np.isfinite(value) for value in numeric_values):
-            raise ValueError("undercutter price and delta parameters must be finite")
-        if (
-            self.p_min < self.bounds.uniform_min
-            or self.p_max > self.bounds.uniform_max
-        ):
-            raise ValueError("p_min and p_max must lie within uniform price bounds")
-        if self.p_min >= self.p_max:
-            raise ValueError("p_min must be less than p_max")
-        if self.delta_min < 0 or self.delta_min >= self.delta_max:
-            raise ValueError("delta bounds must satisfy 0 <= delta_min < delta_max")
-        if not self.reaction_delays:
-            raise ValueError("reaction_delays must not be empty")
-        if any(
-            not isinstance(delay, int)
-            or isinstance(delay, bool)
-            or delay < 1
-            for delay in self.reaction_delays
-        ):
-            raise ValueError("reaction delays must be positive integers")
 
     def _sample_delta(self) -> float:
         return float(self.rng.uniform(self.delta_min, self.delta_max))
@@ -769,6 +742,33 @@ class UniformUndercutterOpponent(OpponentPolicy):
         )
         return price_new, price_old
 
+    def _validate_parameters(self) -> None:
+        numeric_values = (
+            self.p_min,
+            self.p_max,
+            self.delta_min,
+            self.delta_max,
+        )
+        if not all(np.isfinite(value) for value in numeric_values):
+            raise ValueError("undercutter price and delta parameters must be finite")
+        if (
+            self.p_min < self.bounds.uniform_min
+            or self.p_max > self.bounds.uniform_max
+        ):
+            raise ValueError("p_min and p_max must lie within uniform price bounds")
+        if self.p_min >= self.p_max:
+            raise ValueError("p_min must be less than p_max")
+        if self.delta_min < 0 or self.delta_min >= self.delta_max:
+            raise ValueError("delta bounds must satisfy 0 <= delta_min < delta_max")
+        if not self.reaction_delays:
+            raise ValueError("reaction_delays must not be empty")
+        if any(
+            not isinstance(delay, int)
+            or isinstance(delay, bool)
+            or delay < 1
+            for delay in self.reaction_delays
+        ):
+            raise ValueError("reaction delays must be positive integers")
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(delta={self._delta:.2f}, "
@@ -983,20 +983,6 @@ class BBPFixedDiscriminatorOpponent(OpponentPolicy):
         self._validate_parameters()
         self._sample_episode_prices()
 
-    def _validate_parameters(self) -> None:
-        values = (
-            self.mid_price, self.high_price,
-            self.discount_min, self.discount_max,
-            self.markup_min, self.markup_max,
-        )
-        if not all(np.isfinite(value) for value in values):
-            raise ValueError("fixed discriminator parameters must be finite")
-        if self.mid_price >= self.high_price:
-            raise ValueError("mid_price must be less than high_price")
-        if self.discount_min <= 0 or self.discount_min >= self.discount_max:
-            raise ValueError("discount bounds must satisfy 0 < min < max")
-        if self.markup_min <= 0 or self.markup_min >= self.markup_max:
-            raise ValueError("markup bounds must satisfy 0 < min < max")
 
     def _sample_episode_prices(self) -> None:
         self._base_price = float(self.rng.uniform(self.mid_price, self.high_price))
@@ -1032,6 +1018,21 @@ class BBPFixedDiscriminatorOpponent(OpponentPolicy):
     def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
         return self._price_new, self._price_old
 
+    def _validate_parameters(self) -> None:
+        values = (
+            self.mid_price, self.high_price,
+            self.discount_min, self.discount_max,
+            self.markup_min, self.markup_max,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("fixed discriminator parameters must be finite")
+        if self.mid_price >= self.high_price:
+            raise ValueError("mid_price must be less than high_price")
+        if self.discount_min <= 0 or self.discount_min >= self.discount_max:
+            raise ValueError("discount bounds must satisfy 0 < min < max")
+        if self.markup_min <= 0 or self.markup_min >= self.markup_max:
+            raise ValueError("markup bounds must satisfy 0 < min < max")
+    
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(new={self._price_new:.2f}, "
@@ -1060,19 +1061,6 @@ class BBPAcquisitionPredatorOpponent(OpponentPolicy):
         self._validate_parameters()
         self._sample_episode_prices()
 
-    def _validate_parameters(self) -> None:
-        values = (
-            self.epsilon_min, self.epsilon_max,
-            self.spread_min, self.spread_max,
-        )
-        if not all(np.isfinite(value) for value in values):
-            raise ValueError("acquisition predator parameters must be finite")
-        if self.epsilon_min < 0 or self.epsilon_min >= self.epsilon_max:
-            raise ValueError("epsilon bounds must satisfy 0 <= min < max")
-        if self.epsilon_max > self.bounds.bbp_new_max - self.bounds.bbp_new_min:
-            raise ValueError("epsilon_max exceeds the new-customer price range")
-        if self.spread_min <= 0 or self.spread_min >= self.spread_max:
-            raise ValueError("spread bounds must satisfy 0 < min < max")
 
     def _sample_episode_prices(self) -> None:
         self._epsilon = float(
@@ -1104,6 +1092,20 @@ class BBPAcquisitionPredatorOpponent(OpponentPolicy):
     def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
         return self._price_new, self._price_old
 
+    def _validate_parameters(self) -> None:
+        values = (
+            self.epsilon_min, self.epsilon_max,
+            self.spread_min, self.spread_max,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("acquisition predator parameters must be finite")
+        if self.epsilon_min < 0 or self.epsilon_min >= self.epsilon_max:
+            raise ValueError("epsilon bounds must satisfy 0 <= min < max")
+        if self.epsilon_max > self.bounds.bbp_new_max - self.bounds.bbp_new_min:
+            raise ValueError("epsilon_max exceeds the new-customer price range")
+        if self.spread_min <= 0 or self.spread_min >= self.spread_max:
+            raise ValueError("spread bounds must satisfy 0 < min < max")
+    
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(new={self._price_new:.2f}, "
@@ -1132,22 +1134,6 @@ class BBPLoyaltyHarvesterOpponent(OpponentPolicy):
         self._validate_parameters()
         self._sample_episode_prices()
 
-    def _validate_parameters(self) -> None:
-        values = (self.mid_low, self.mid_price, self.mid_high, self.p_max)
-        if not all(np.isfinite(value) for value in values):
-            raise ValueError("loyalty harvester parameters must be finite")
-        if not (
-            self.bounds.bbp_new_min <= self.mid_low < self.mid_price
-            <= self.bounds.bbp_new_max
-        ):
-            raise ValueError("new-customer interval lies outside BBP new bounds")
-        if not (
-            self.bounds.bbp_old_min <= self.mid_high < self.p_max
-            <= self.bounds.bbp_old_max
-        ):
-            raise ValueError("old-customer interval lies outside BBP old bounds")
-        if self.mid_high <= self.mid_price:
-            raise ValueError("mid_high must exceed the maximum new-customer price")
 
     def _sample_episode_prices(self) -> None:
         raw_new = float(self.rng.uniform(self.mid_low, self.mid_price))
@@ -1167,6 +1153,22 @@ class BBPLoyaltyHarvesterOpponent(OpponentPolicy):
     def get_bbp_prices(self, observation: OpponentObservation) -> Tuple[float, float]:
         return self._price_new, self._price_old
 
+    def _validate_parameters(self) -> None:
+        values = (self.mid_low, self.mid_price, self.mid_high, self.p_max)
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("loyalty harvester parameters must be finite")
+        if not (
+            self.bounds.bbp_new_min <= self.mid_low < self.mid_price
+            <= self.bounds.bbp_new_max
+        ):
+            raise ValueError("new-customer interval lies outside BBP new bounds")
+        if not (
+            self.bounds.bbp_old_min <= self.mid_high < self.p_max
+            <= self.bounds.bbp_old_max
+        ):
+            raise ValueError("old-customer interval lies outside BBP old bounds")
+        if self.mid_high <= self.mid_price:
+            raise ValueError("mid_high must exceed the maximum new-customer price")
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(new={self._price_new:.2f}, "

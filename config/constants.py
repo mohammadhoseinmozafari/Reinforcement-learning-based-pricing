@@ -51,7 +51,7 @@ PRICE_BBP_OLD_MIN = 1.0
 PRICE_BBP_OLD_MAX = 5.0
 
 # Consumer is "established" if bought from same firm for last N periods
-BBP_RETENTION_PERIODS = 2
+BBP_RETENTION_PERIODS = 1
 
 # =============================================================================
 # HIERARCHY PARAMETERS

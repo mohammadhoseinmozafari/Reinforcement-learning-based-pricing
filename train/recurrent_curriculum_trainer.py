@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 
 
 import hashlib
@@ -21,7 +20,6 @@ from config.constants import (
     PRICE_UNIFORM_MAX,
     PRICE_UNIFORM_MIN,
 )
-from log.internal_logger import setup_internal_logger
 from models.buffer import CurriculumSequenceReplayBuffer
 from models.recurrent_sac_opponent_embedding import (
     RecurrentSACOpponentEmbeddingAgent,
@@ -63,13 +61,6 @@ class RecurrentCurriculumTrainer:
 
         self.rng = np.random.default_rng(self.config.seed)
 
-        self.internal_logger = setup_internal_logger(
-            name= f"trainer.{str(run_id)}",
-            log_dir= f"log/logs/trainer.{str(run_id)}",
-            level = logging.DEBUG if self.config.verbose else logging.INFO,
-            filename="trainer_internal.log"    
-
-        )
 
         if agent.replay_buffer is None:
             agent.attach_replay_buffer(replay_buffer)
@@ -193,10 +184,6 @@ class RecurrentCurriculumTrainer:
         if not 0.0 <= random_action_prob <= 1.0:
             raise ValueError("random_action_prob must be in [0, 1]")
         
-        self.internal_logger.info(
-            "Warmup started with seed =%d",
-            seed
-        )
         rng = np.random.default_rng(seed)
         collected = 0
         while collected < steps:
@@ -265,7 +252,6 @@ class RecurrentCurriculumTrainer:
     ) -> Tuple[float, List[float], List[float]]:
         """Collect one episode, update from prior episodes, then store it."""
         episode_seed = self._sample_seed()
-        print(f"episode seed: {episode_seed} ")
         state, _ = env.reset(seed=episode_seed)
 
         metrics.reset_episode()
