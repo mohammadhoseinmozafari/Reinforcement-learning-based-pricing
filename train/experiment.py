@@ -158,6 +158,10 @@ def load_curriculum_config(
     if not isinstance(scheduler, dict):
         raise ExperimentConfigError(f"{curriculum_path}:scheduler must be a mapping")
     _reject_unknown(scheduler, SCHEDULER_KEYS, f"{curriculum_path}:scheduler")
+    scheduler_minimum = scheduler.get("min_episodes_per_stage", 100)
+    if scheduler_minimum is None:
+        scheduler_minimum = 100
+    scheduler_maximum = scheduler.get("max_episodes_per_stage")
 
     raw_stages = raw["stages"]
     if not isinstance(raw_stages, list) or not raw_stages:
@@ -195,11 +199,17 @@ def load_curriculum_config(
         opponents.add(opponent)
         min_episodes = int(raw_stage.get(
             "min_episodes",
-            raw_stage.get("min_episodes_per_stage", 100),
+            raw_stage.get(
+                "min_episodes_per_stage",
+                scheduler_minimum,
+            ),
         ))
         max_episodes = raw_stage.get(
             "max_episodes",
-            raw_stage.get("max_episodes_per_stage"),
+            raw_stage.get(
+                "max_episodes_per_stage",
+                scheduler_maximum,
+            ),
         )
         if min_episodes <= 0:
             raise ExperimentConfigError(f"{location}: minimum episodes must be positive")

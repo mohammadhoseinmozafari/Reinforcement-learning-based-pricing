@@ -7,14 +7,42 @@ scheduler:
   min_episodes_per_stage: 100
   max_episodes_per_stage: 250
 
+# Legacy sequential curriculum. The universal protocol uses universal_mixed.yaml
+# and samples its pool per episode instead of advancing through these stages.
 stages:
-  - {name: premium_uniform, opponent_type: premium_uniform, difficulty: tutorial, description: "Fixed uniform price 3.5, easiest"}
-  - {name: premium_bbp, opponent_type: premium_bbp, difficulty: tutorial, description: "Fixed BBP prices 3.0/4.0"}
-  - {name: premium_passive_uniform, opponent_type: premium_passive_uniform, difficulty: tutorial, description: "Fixed uniform price 3.0"}
-  - {name: premium_passive_bbp, opponent_type: premium_passive_bbp, difficulty: tutorial, description: "Fixed BBP prices 2.5/3.5"}
-  - {name: passive_uniform, opponent_type: passive_uniform, difficulty: tutorial, description: "Fixed uniform price 2.5"}
-  - {name: passive_bbp, opponent_type: passive_bbp, difficulty: tutorial, description: "Fixed BBP prices 2.0/3.0"}
-  - {name: passive_aggressive_uniform, opponent_type: passive_aggressive_uniform, difficulty: tutorial, description: "Fixed uniform price 2.0"}
-  - {name: passive_aggressive_bbp, opponent_type: passive_aggressive_bbp, difficulty: tutorial, description: "Fixed BBP prices 1.5/2.5"}
-  - {name: aggressive_uniform, opponent_type: aggressive_uniform, difficulty: tutorial, description: "Fixed uniform price 1.5"}
-  - {name: aggressive_bbp, opponent_type: aggressive_bbp, difficulty: tutorial, description: "Fixed BBP prices 1.0/2.0, most competitive"}
+  - name: fixed_uniform
+    opponent_type: uniform_fixed
+    difficulty: tutorial
+    description: "Episode-fixed randomized uniform price"
+  - name: fixed_bbp
+    opponent_type: bbp_fixed_discriminator
+    difficulty: easy
+    description: "Episode-fixed randomized BBP discriminator"
+  - name: random_uniform
+    opponent_type: uniform_random
+    difficulty: easy
+    description: "Noisy randomized uniform price"
+  - name: acquisition_bbp
+    opponent_type: bbp_acquisition_predator
+    difficulty: medium
+    description: "Aggressive BBP new-customer acquisition"
+  - name: undercutter_uniform
+    opponent_type: uniform_undercutter
+    difficulty: medium
+    description: "Delayed uniform-price undercutting response"
+  - name: loyalty_bbp
+    opponent_type: bbp_loyalty_harvester
+    difficulty: hard
+    description: "BBP policy harvesting established-customer loyalty"
+  - name: tit_for_tat_uniform
+    opponent_type: uniform_tit_for_tat
+    difficulty: hard
+    description: "Cooperative uniform pricing with finite retaliation"
+  - name: myopic_bbp
+    opponent_type: bbp_myopic_segment_optimizer
+    difficulty: expert
+    description: "Myopic segmented BBP grid optimizer"
+  - name: myopic_uniform
+    opponent_type: uniform_myopic
+    difficulty: expert
+    description: "Analytical one-period uniform best response"

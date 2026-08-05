@@ -1,0 +1,80 @@
+protocol_version: universal_pricing_v1
+action_contract_version: pricing_action_v1
+observation_contract_version: pricing_observation_v1
+curriculum_id: mixed_balanced
+regime_commitment_length: 10
+reward_specification: normalized_raw_profit
+artifact_root: experiments/universal_pricing_v1
+
+opponent_pool_config: ../curricula/universal_mixed.yaml
+seed_manifest: ../seeds/universal_pricing_v1.yaml
+
+agent_profiles:
+  sac:
+    architecture: sac
+  rsac:
+    architecture: rsac
+    sequence_length: 16
+    episode_replay_capacity: 1000
+  oe_rsac:
+    architecture: oe_rsac
+    sequence_length: 16
+    episode_replay_capacity: 1000
+    opponent_embedding_dim: 32
+    encoder_hidden_dim: 128
+    auxiliary_loss_weight: 1.0
+
+# Parameters are frozen here; Day 2 implements their independent samplers.
+consumer_distributions:
+  location:
+    uniform:
+      low: 0.0
+      high: 1.0
+    truncated_normal:
+      mean: 0.5
+      standard_deviation: 0.2
+      low: 0.0
+      high: 1.0
+    truncated_skew_normal:
+      location: 0.5
+      scale: 0.2
+      shape: 5.0
+      low: 0.0
+      high: 1.0
+  strategicness:
+    uniform:
+      low: 0.0
+      high: 1.0
+    truncated_normal:
+      mean: 0.5
+      standard_deviation: 0.2
+      low: 0.0
+      high: 1.0
+    truncated_skew_normal:
+      location: 0.5
+      scale: 0.2
+      shape: 5.0
+      low: 0.0
+      high: 1.0
+  exclusivity:
+    uniform:
+      low: 0.0
+      high: 1.0
+    truncated_normal:
+      mean: 0.5
+      standard_deviation: 0.2
+      low: 0.0
+      high: 1.0
+    truncated_skew_normal:
+      location: 0.5
+      scale: 0.2
+      shape: 5.0
+      low: 0.0
+      high: 1.0
+
+training_budget:
+  environment_steps: 300000
+  warmup_steps: 500
+  updates_per_step: 1
+  evaluation_interval_steps: 10000
+  checkpoint_interval_steps: 10000
