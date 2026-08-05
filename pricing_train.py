@@ -149,10 +149,17 @@ def _run_protocol_mode(args: argparse.Namespace) -> None:
     print(f"  Architecture:    {coordinate.agent_architecture.value}")
     print(f"  Training seed:   {run_seed_bundle.run_seed}")
     print(f"  Run directory:   {artifact_layout.run_directory(coordinate)}")
-    print(
-        "\nDay 1 validation is complete. Universal environment and agent "
-        "construction are implemented on Days 2–4."
-    )
+    if coordinate.agent_architecture.value == "sac":
+        print(
+            "\nThe universal environment and SACPricingAgent are available. "
+            "Protocol training remains validation-only until the shared "
+            "Day 4 runner is implemented."
+        )
+    else:
+        print(
+            "\nThe universal environment is available. This architecture and "
+            "the shared protocol training runner are implemented on Day 4."
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> None:

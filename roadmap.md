@@ -235,8 +235,9 @@ model names without adding empty model stubs:
 | `ExperimentRunManifest` | Records immutable resolved protocol, seed, source, hardware, status, and artifact facts. |
 | `ManifestRepository` | Reads and atomically replaces identity-compatible manifests. |
 
-`SACPricingAgent`, `RecurrentSACPricingAgent`, and
-`OpponentEmbeddingRecurrentSACPricingAgent` are implemented on Days 3–4.
+`SACPricingAgent` is implemented on Day 3.
+`RecurrentSACPricingAgent` and
+`OpponentEmbeddingRecurrentSACPricingAgent` are implemented on Day 4.
 
 ### Day 2 — Unified environment and consumer distributions
 
@@ -287,6 +288,8 @@ Exit gate:
 
 ### Day 3 — Hybrid SAC
 
+Status: implemented.
+
 Tasks:
 
 - Implement the categorical regime head and conditional continuous price heads.
@@ -297,6 +300,22 @@ Tasks:
 - Add checkpoint save/load support for the new architecture.
 - Add numerical tests for action bounds, loss shapes, gradient flow, and
   deterministic inference.
+
+#### Day 3 classes and responsibilities
+
+| Class | Responsibility |
+|---|---|
+| `SACPricingAgentConfig` | Validates the feed-forward architecture, optimizer, entropy, replay, and numerical hyperparameters. |
+| `HybridPricingActionTensorCodec` | Produces canonical critic actions and removes inactive price controls. |
+| `HybridPricingPolicyOutput` | Gives stable names to categorical, uniform-price, and BBP-price actor outputs. |
+| `SACPricingActor` | Implements the categorical regime head and conditional tanh-Gaussian uniform and BBP price heads. |
+| `SACPricingCritic` | Estimates one scalar Q-value from an observation and canonical hybrid action. |
+| `UniversalPricingTransition` | Validates and owns one complete universal-environment replay transition. |
+| `UniversalPricingReplayBatch` | Gives sampled replay arrays stable names and shapes. |
+| `UniversalPricingReplayBuffer` | Stores transitions and samples them through a private committed NumPy RNG. |
+| `SACPricingUpdateMetrics` | Records the critic, actor, entropy, Q-value, and decision-mask diagnostics from an update. |
+| `SACPricingAgent` | Selects masked hybrid actions, performs exact two-regime SAC updates, manages three entropy temperatures, and saves/restores complete checkpoints. |
+| `SACPricingAgentFactory` | Constructs the SAC agent and replay buffer from the validated profile and run seed bundle. |
 
 Exit gate:
 

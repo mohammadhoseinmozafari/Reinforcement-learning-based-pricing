@@ -26,6 +26,7 @@ from env.pricing_contracts import (
     AGENT_ARCHITECTURE_SPECS,
     AgentArchitecture,
 )
+from models.sac_pricing import SACPricingAgentConfig
 
 
 PROTOCOL_VERSION = "universal_pricing_v1"
@@ -274,6 +275,7 @@ class AgentProfileConfig:
     opponent_embedding_dim: int | None = None
     encoder_hidden_dim: int | None = None
     auxiliary_loss_weight: float | None = None
+    sac_pricing_config: SACPricingAgentConfig | None = None
 
     def __post_init__(self) -> None:
         try:
@@ -293,10 +295,31 @@ class AgentProfileConfig:
         if architecture is AgentArchitecture.SAC:
             prohibited = sequence_fields + encoder_fields
             self._reject_present(prohibited)
+            if self.sac_pricing_config is None:
+                object.__setattr__(
+                    self,
+                    "sac_pricing_config",
+                    SACPricingAgentConfig(),
+                )
+            elif not isinstance(
+                self.sac_pricing_config,
+                SACPricingAgentConfig,
+            ):
+                raise ProtocolConfigError(
+                    "sac_pricing_config must be SACPricingAgentConfig"
+                )
         elif architecture is AgentArchitecture.RSAC:
+            if self.sac_pricing_config is not None:
+                raise ProtocolConfigError(
+                    "rsac rejects SAC pricing hyperparameters"
+                )
             self._require_positive_integers(sequence_fields)
             self._reject_present(encoder_fields)
         else:
+            if self.sac_pricing_config is not None:
+                raise ProtocolConfigError(
+                    "oe_rsac rejects SAC pricing hyperparameters"
+                )
             self._require_positive_integers(
                 sequence_fields
                 + ("opponent_embedding_dim", "encoder_hidden_dim")
@@ -337,6 +360,8 @@ class AgentProfileConfig:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"architecture": self.architecture.value}
+        if self.sac_pricing_config is not None:
+            result.update(self.sac_pricing_config.to_dict())
         for field_name in (
             "sequence_length",
             "episode_replay_capacity",
@@ -1224,7 +1249,7 @@ def _parse_agent_profiles(
     if not isinstance(raw_profiles, dict):
         raise ProtocolConfigError(f"{location} must be a mapping")
     profiles: dict[AgentArchitecture, AgentProfileConfig] = {}
-    allowed = {
+    recurrent_fields = {
         "architecture",
         "sequence_length",
         "episode_replay_capacity",
@@ -1232,6 +1257,8 @@ def _parse_agent_profiles(
         "encoder_hidden_dim",
         "auxiliary_loss_weight",
     }
+    sac_fields = set(SACPricingAgentConfig.__dataclass_fields__)
+    allowed = recurrent_fields | sac_fields
     for raw_name, raw_profile in raw_profiles.items():
         try:
             architecture = AgentArchitecture(raw_name)
@@ -1245,7 +1272,31 @@ def _parse_agent_profiles(
             )
         _reject_unknown(raw_profile, allowed, f"{location}:{raw_name}")
         _require(raw_profile, {"architecture"}, f"{location}:{raw_name}")
-        profiles[architecture] = AgentProfileConfig(**raw_profile)
+        profile_values = dict(raw_profile)
+        sac_values = {
+            field_name: profile_values.pop(field_name)
+            for field_name in tuple(profile_values)
+            if field_name in sac_fields
+        }
+        if sac_values and architecture is not AgentArchitecture.SAC:
+            raise ProtocolConfigError(
+                f"{architecture.value} rejects SAC pricing fields: "
+                + ", ".join(sorted(sac_values))
+            )
+        try:
+            sac_config = (
+                SACPricingAgentConfig(**sac_values)
+                if architecture is AgentArchitecture.SAC
+                else None
+            )
+        except (TypeError, ValueError) as exc:
+            raise ProtocolConfigError(
+                f"Invalid SAC profile in {location}:{raw_name}: {exc}"
+            ) from exc
+        profiles[architecture] = AgentProfileConfig(
+            **profile_values,
+            sac_pricing_config=sac_config,
+        )
     return profiles
 
 

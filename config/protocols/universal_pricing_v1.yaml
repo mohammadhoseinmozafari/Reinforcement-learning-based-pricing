@@ -12,6 +12,24 @@ seed_manifest: ../seeds/universal_pricing_v1.yaml
 agent_profiles:
   sac:
     architecture: sac
+    actor_hidden_dimensions: [256, 256]
+    critic_hidden_dimensions: [256, 256]
+    actor_learning_rate: 0.0003
+    critic_learning_rate: 0.0003
+    entropy_learning_rate: 0.0003
+    gamma: 0.99
+    tau: 0.005
+    initial_regime_temperature: 0.2
+    initial_uniform_price_temperature: 0.2
+    initial_bbp_price_temperature: 0.2
+    regime_target_entropy_ratio: 0.98
+    uniform_price_target_entropy: -1.0
+    bbp_price_target_entropy: -2.0
+    log_std_min: -5.0
+    log_std_max: 2.0
+    gradient_clip_norm: 10.0
+    replay_capacity: 300000
+    batch_size: 256
   rsac:
     architecture: rsac
     sequence_length: 16
