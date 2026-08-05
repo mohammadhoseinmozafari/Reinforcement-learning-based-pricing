@@ -36,8 +36,8 @@ consumer_distributions:
       low: 0.0
       high: 1.0
     truncated_skew_normal:
-      location: 0.5
-      scale: 0.2
+      location: 0.2457160185
+      scale: 0.3497947666
       shape: 5.0
       low: 0.0
       high: 1.0
@@ -51,8 +51,8 @@ consumer_distributions:
       low: 0.0
       high: 1.0
     truncated_skew_normal:
-      location: 0.5
-      scale: 0.2
+      location: 0.2457160185
+      scale: 0.3497947666
       shape: 5.0
       low: 0.0
       high: 1.0
@@ -66,8 +66,8 @@ consumer_distributions:
       low: 0.0
       high: 1.0
     truncated_skew_normal:
-      location: 0.5
-      scale: 0.2
+      location: 0.2457160185
+      scale: 0.3497947666
       shape: 5.0
       low: 0.0
       high: 1.0

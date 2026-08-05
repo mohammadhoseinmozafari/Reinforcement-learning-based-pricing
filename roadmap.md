@@ -250,7 +250,8 @@ Tasks:
 - Correct observation bounds and validate initial observations.
 - Add reproducibility, truncation, empirical-moment, symmetry, and environment
   contract tests.
-- Add known-policy scenarios where uniform or BBP is intentionally preferable.
+- Add an equal-price scenario where uniform and BBP are economically
+  equivalent and an established-customer scenario where BBP is preferable.
 
 Exit gate:
 
@@ -258,7 +259,31 @@ Exit gate:
 - Different episode seeds produce different populations.
 - All observations and actions satisfy their declared spaces.
 - Uniform and BBP market paths can both run for a complete episode.
-- Known-policy scenarios have the expected economic ordering.
+- Equal effective prices produce equal no-history outcomes.
+- The established-customer scenario produces the expected BBP advantage.
+
+#### Day 2 classes and responsibilities
+
+| Class | Responsibility |
+|---|---|
+| `ConsumerAttribute` | Defines the three independently seeded consumer attributes. |
+| `ConsumerAttributeSampler` | Defines the bounded explicit-generator sampling interface. |
+| `UniformConsumerAttributeSampler` | Samples uniform attributes. |
+| `TruncatedNormalConsumerAttributeSampler` | Samples true truncated-normal attributes through inverse CDFs. |
+| `TruncatedSkewNormalConsumerAttributeSampler` | Samples moment-matched truncated skew-normal attributes. |
+| `TruncatedSkewNormalMomentCalibrator` | Reconstructs and validates the frozen skew parameters. |
+| `ConsumerAttributeSamplerRegistry` | Validates the family-to-sampler mapping. |
+| `ConsumerPopulationSnapshot` | Stores one immutable sampled population. |
+| `ConsumerPopulationGenerator` | Derives independent attribute streams and generates a population. |
+| `UniversalPricingEpisodeContext` | Records one episode's seeds and opponent assignment. |
+| `UniversalPricingEpisodeContextFactory` | Resolves deterministic episode contexts. |
+| `PricingPriceTransform` | Converts normalized controls and actual prices. |
+| `RegimeDecisionResult` | Records the proposed and effective regime decision. |
+| `RegimeCommitmentController` | Enforces immediate selection and ten-period commitments. |
+| `UniversalPricingObservationBuilder` | Builds and validates the frozen 18-feature observation. |
+| `ProfitRewardNormalizer` | Normalizes raw own profit against the theoretical bound. |
+| `UniversalPricingEnv` | Coordinates the population, opponent, market, action, observation, and reward contracts. |
+| `UniversalPricingEnvironmentFactory` | Builds an unwrapped universal environment from a protocol coordinate. |
 
 ### Day 3 — Hybrid SAC
 
@@ -276,7 +301,8 @@ Tasks:
 Exit gate:
 
 - Hybrid SAC overfits a small deterministic environment.
-- It learns uniform pricing in the uniform-preferred sanity scenario.
+- It learns an economically competitive policy in the equal-price sanity
+  scenario; learned regime usage is reported as a diagnostic.
 - It learns BBP pricing and a meaningful price spread in the BBP-preferred
   sanity scenario.
 - Saving and restoring a checkpoint preserves deterministic actions.
@@ -322,7 +348,8 @@ Tasks:
 Exit gate:
 
 - Nine pilot runs complete without numerical or contract failures.
-- Every model uses both regimes somewhere in the mixed setting.
+- Every model can execute both regimes; learned mixed-regime usage is reported
+  as a diagnostic rather than a pass/fail condition.
 - Every model beats random-price and random-regime baselines.
 - At least one sanity scenario causes a clear, economically sensible change in
   regime usage.

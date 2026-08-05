@@ -160,6 +160,13 @@ class ConsumerDistributionSpec:
             raise ProtocolConfigError("standard_deviation must be positive")
         if "scale" in parameters and parameters["scale"] <= 0:
             raise ProtocolConfigError("scale must be positive")
+        if (
+            family is ConsumerDistributionFamily.TRUNCATED_SKEW_NORMAL
+            and parameters["shape"] <= 0
+        ):
+            raise ProtocolConfigError(
+                "truncated_skew_normal shape must be positive"
+            )
         object.__setattr__(self, "parameters", _immutable_mapping(parameters))
 
     def to_dict(self) -> dict[str, Any]:
