@@ -8,6 +8,7 @@ from train.universal_pricing_protocol import (
     ExperimentCoordinate,
     ExperimentMatrix,
     ProtocolConfigError,
+    RunSeedBundle,
     UniversalPricingProtocolConfig,
 )
 
@@ -30,6 +31,19 @@ class UniversalPricingEnvironmentFactory:
         self,
         coordinate: ExperimentCoordinate,
     ) -> UniversalPricingEnv:
+        return self.create_environment_with_run_seed(
+            coordinate,
+            self.protocol.run_seed_bundle(
+                coordinate.training_seed_index
+            ),
+        )
+
+    def create_environment_with_run_seed(
+        self,
+        coordinate: ExperimentCoordinate,
+        run_seed_bundle: RunSeedBundle,
+    ) -> UniversalPricingEnv:
+        """Construct an environment with an explicit training/evaluation bundle."""
         if coordinate not in ExperimentMatrix(self.protocol).coordinates():
             raise ProtocolConfigError(
                 "Experiment coordinate is outside the protocol matrix"
@@ -39,9 +53,7 @@ class UniversalPricingEnvironmentFactory:
                 coordinate.distribution_combination
             ),
             opponent_pool=self.protocol.opponent_pool,
-            run_seed_bundle=self.protocol.run_seed_bundle(
-                coordinate.training_seed_index
-            ),
+            run_seed_bundle=run_seed_bundle,
             regime_commitment_length=(
                 self.protocol.regime_commitment_length
             ),

@@ -52,6 +52,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Print the complete protocol matrix without creating artifacts",
     )
     parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate one protocol coordinate without creating artifacts",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume a protocol run from its latest exact snapshot",
+    )
+    parser.add_argument(
         "--agent",
         choices=[architecture.value for architecture in AgentArchitecture],
         help="Universal protocol agent architecture",
@@ -89,7 +99,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         args.seed_index,
     )
     if args.config is not None:
-        if args.enumerate or any(value is not None for value in protocol_selectors):
+        if (
+            args.enumerate
+            or args.validate_only
+            or args.resume
+            or any(value is not None for value in protocol_selectors)
+        ):
             parser.error(
                 "protocol selectors and --enumerate require --protocol"
             )
@@ -97,7 +112,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         legacy_overrides = (
             args.episodes,
             args.seed,
-            args.device,
             args.save_dir,
             args.training_config,
         )
@@ -105,8 +119,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             parser.error(
                 "legacy overrides cannot be combined with --protocol"
             )
+        if args.validate_only and args.resume:
+            parser.error("--validate-only cannot be combined with --resume")
         if args.enumerate:
-            if any(value is not None for value in protocol_selectors):
+            if (
+                args.validate_only
+                or args.resume
+                or any(value is not None for value in protocol_selectors)
+            ):
                 parser.error(
                     "--enumerate cannot be combined with one-run selectors"
                 )
@@ -119,7 +139,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def _run_protocol_mode(args: argparse.Namespace) -> None:
-    """Validate or enumerate a protocol without constructing an environment."""
+    """Validate, enumerate, or train one universal protocol coordinate."""
 
     try:
         protocol = load_universal_pricing_protocol(args.protocol)
@@ -149,17 +169,19 @@ def _run_protocol_mode(args: argparse.Namespace) -> None:
     print(f"  Architecture:    {coordinate.agent_architecture.value}")
     print(f"  Training seed:   {run_seed_bundle.run_seed}")
     print(f"  Run directory:   {artifact_layout.run_directory(coordinate)}")
-    if coordinate.agent_architecture.value == "sac":
-        print(
-            "\nThe universal environment and SACPricingAgent are available. "
-            "Protocol training remains validation-only until the shared "
-            "Day 4 runner is implemented."
-        )
-    else:
-        print(
-            "\nThe universal environment is available. This architecture and "
-            "the shared protocol training runner are implemented on Day 4."
-        )
+    if args.validate_only:
+        print("\nValidation completed without creating run artifacts.")
+        return
+    from train.universal_pricing_trainer import UniversalPricingTrainer
+
+    trainer = UniversalPricingTrainer(
+        protocol,
+        coordinate,
+        device=args.device or "cpu",
+        resume=args.resume,
+    )
+    manifest = trainer.train()
+    print(f"\nRun finished with status: {manifest.status.value}")
 
 
 def main(argv: Sequence[str] | None = None) -> None:

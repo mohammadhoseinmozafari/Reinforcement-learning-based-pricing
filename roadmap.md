@@ -328,6 +328,8 @@ Exit gate:
 
 ### Day 4 — Plain RSAC and embedding RSAC
 
+Status: implemented.
+
 Tasks:
 
 - Implement plain RSAC by using recurrent market history without an opponent
@@ -337,6 +339,25 @@ Tasks:
 - Verify recurrent-state reset at episode and evaluation boundaries.
 - Ensure padded sequence steps do not affect any loss.
 - Record parameter counts and model-specific compute metrics.
+
+#### Day 4 classes and responsibilities
+
+| Class | Responsibility |
+|---|---|
+| `RecurrentSACPricingAgentConfig` | Validates shared recurrent and OE-only architecture settings. |
+| `RecurrentPricingActor` | Produces hybrid regime and conditional-price policies from recurrent interaction history. |
+| `RecurrentPricingCritic` | Encodes action-independent history and evaluates canonical hybrid actions. |
+| `OpponentHistoryEncoder` | Learns a pre-decision opponent embedding and predicts opponent controls. |
+| `RecurrentSACPricingAgent` | Implements plain recurrent hybrid SAC without an opponent encoder. |
+| `OpponentEmbeddingRecurrentSACPricingAgent` | Adds the dedicated opponent encoder, auxiliary loss, and target encoder. |
+| `UniversalPricingEpisode` | Validates one complete contiguous universal episode. |
+| `UniversalPricingEpisodeBuilder` | Accumulates environment transitions into a complete episode. |
+| `UniversalPricingSequenceBatch` | Carries burn-in, learning, padding, and previous-transition context. |
+| `UniversalPricingSequenceReplayBuffer` | Samples reproducible 16-step burn-in and learning windows. |
+| `UniversalPricingAgentFactory` | Constructs all three agents and their compatible replay buffers. |
+| `UniversalPricingTrainer` | Runs fixed-step training, logging, checkpointing, interruption, and exact resume. |
+| `UniversalPricingTrainingSnapshot` | Stores the complete episode-boundary continuation state. |
+| `UniversalPricingEvaluator` | Runs balanced deterministic validation and final evaluation from the final checkpoint. |
 
 Exit gate:
 

@@ -12,6 +12,7 @@ from train.universal_pricing_protocol import (
     PROTOCOL_VERSION,
     ProtocolConfigError,
     load_seed_bank_manifest,
+    load_universal_pricing_protocol,
 )
 
 
@@ -30,6 +31,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Directory containing manifest.json for one universal run",
     )
+    parser.add_argument("--device", default="cpu")
     parser.add_argument(
         "--evaluation-suite",
         required=True,
@@ -84,13 +86,51 @@ def main(argv: Sequence[str] | None = None) -> None:
     except (ProtocolConfigError, ValueError, TypeError) as exc:
         raise SystemExit(f"Evaluation configuration error: {exc}") from exc
 
-    print(
-        f"Validated {args.evaluation_suite} suite with {len(seeds)} "
-        "locked environment seeds."
+    manifest = ManifestRepository().read(
+        args.run_directory / "manifest.json"
+    )
+    if manifest.status.value != "completed":
+        raise SystemExit("Evaluation requires a completed training run")
+    protocol_path = (
+        Path(__file__).resolve().parent
+        / "config"
+        / "protocols"
+        / "universal_pricing_v1.yaml"
+    )
+    protocol = load_universal_pricing_protocol(protocol_path)
+    if protocol.to_dict() != dict(manifest.resolved_protocol):
+        raise SystemExit(
+            "Evaluation protocol does not match the run manifest"
+        )
+    checkpoint = Path(
+        manifest.artifact_references.get(
+            "final_checkpoint",
+            str(args.run_directory / "checkpoints" / "final.pt"),
+        )
+    )
+    if not checkpoint.is_file():
+        checkpoint = args.run_directory / "checkpoints" / "final.pt"
+    from evaluation.universal_pricing_evaluator import (
+        UniversalPricingEvaluator,
+    )
+
+    episodes, summary = UniversalPricingEvaluator(
+        protocol,
+        manifest.coordinate,
+        device=args.device,
+    ).evaluate_checkpoint(
+        checkpoint,
+        seeds,
+        suite=args.evaluation_suite,
+        output_directory=args.run_directory / "evaluation",
     )
     print(
-        "Day 1 evaluation validation is complete. Checkpoint execution is "
-        "implemented with the universal agents on Days 3–4."
+        f"Evaluated {len(episodes)} balanced episodes from {len(seeds)} "
+        f"locked {args.evaluation_suite} seeds."
+    )
+    print(
+        "Mean normalized episode reward: "
+        f"{summary['mean_normalized_reward_total']:.6f}"
     )
 
 

@@ -29,6 +29,7 @@ from models.universal_pricing_replay import (
     UniversalPricingReplayBatch,
     UniversalPricingReplayBuffer,
 )
+from models.hybrid_sac_objective import HybridSACObjective
 
 
 SAC_PRICING_CHECKPOINT_SCHEMA_VERSION = "sac_pricing_checkpoint_v1"
@@ -712,21 +713,16 @@ class SACPricingAgent:
             bbp_q
             - self.bbp_price_temperature.detach() * bbp_log_probability
         )
-        branch_values = torch.cat([uniform_soft_q, bbp_soft_q], dim=-1)
-        eligible_value = (
-            probabilities
-            * (
-                branch_values
-                - self.regime_temperature.detach() * log_probabilities
-            )
-        ).sum(dim=-1, keepdim=True)
-        locked_value = (
-            self._current_regime_one_hot(observations) * branch_values
-        ).sum(dim=-1, keepdim=True)
-        decision_allowed = self._decision_allowed(observations)
-        return (
-            decision_allowed * eligible_value
-            + (1.0 - decision_allowed) * locked_value
+        return HybridSACObjective.soft_value(
+            regime_probabilities=probabilities,
+            regime_log_probabilities=log_probabilities,
+            uniform_soft_q=uniform_soft_q,
+            bbp_soft_q=bbp_soft_q,
+            current_regime_one_hot=self._current_regime_one_hot(
+                observations
+            ),
+            regime_decision_masks=self._decision_allowed(observations),
+            regime_temperature=self.regime_temperature.detach(),
         )
 
     def compute_critic_target(
@@ -778,24 +774,16 @@ class SACPricingAgent:
             self.bbp_price_temperature.detach() * bbp_log_probability
             - bbp_q
         )
-        branch_objectives = torch.cat(
-            [uniform_objective, bbp_objective],
-            dim=-1,
-        )
-        eligible_objective = (
-            probabilities
-            * (
-                branch_objectives
-                + self.regime_temperature.detach() * log_probabilities
-            )
-        ).sum(dim=-1, keepdim=True)
-        locked_objective = (
-            self._current_regime_one_hot(observations) * branch_objectives
-        ).sum(dim=-1, keepdim=True)
-        masks = regime_decision_masks
-        return (
-            masks * eligible_objective
-            + (1.0 - masks) * locked_objective
+        return HybridSACObjective.actor_objective(
+            regime_probabilities=probabilities,
+            regime_log_probabilities=log_probabilities,
+            uniform_branch_objective=uniform_objective,
+            bbp_branch_objective=bbp_objective,
+            current_regime_one_hot=self._current_regime_one_hot(
+                observations
+            ),
+            regime_decision_masks=regime_decision_masks,
+            regime_temperature=self.regime_temperature.detach(),
         ).mean()
 
     def _temperature_losses(
@@ -1037,6 +1025,9 @@ class SACPricingAgent:
 
     def reset_recurrent_state(self) -> None:
         """Feed-forward SAC has no recurrent state."""
+
+    def observe_transition(self, transition: Any) -> None:
+        """Feed-forward SAC does not maintain online transition context."""
 
     def policy_diagnostics(self) -> Mapping[str, float]:
         diagnostics = dict(self._last_policy_diagnostics)

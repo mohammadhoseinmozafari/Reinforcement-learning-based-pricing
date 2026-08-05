@@ -27,6 +27,7 @@ from env.pricing_contracts import (
     AgentArchitecture,
 )
 from models.sac_pricing import SACPricingAgentConfig
+from models.recurrent_sac_pricing import RecurrentSACPricingAgentConfig
 
 
 PROTOCOL_VERSION = "universal_pricing_v1"
@@ -276,6 +277,7 @@ class AgentProfileConfig:
     encoder_hidden_dim: int | None = None
     auxiliary_loss_weight: float | None = None
     sac_pricing_config: SACPricingAgentConfig | None = None
+    recurrent_pricing_config: RecurrentSACPricingAgentConfig | None = None
 
     def __post_init__(self) -> None:
         try:
@@ -315,6 +317,18 @@ class AgentProfileConfig:
                 )
             self._require_positive_integers(sequence_fields)
             self._reject_present(encoder_fields)
+            if self.recurrent_pricing_config is None:
+                object.__setattr__(
+                    self,
+                    "recurrent_pricing_config",
+                    RecurrentSACPricingAgentConfig(
+                        architecture=architecture,
+                        learning_sequence_length=int(self.sequence_length),
+                        episode_replay_capacity=int(
+                            self.episode_replay_capacity
+                        ),
+                    ),
+                )
         else:
             if self.sac_pricing_config is not None:
                 raise ProtocolConfigError(
@@ -341,6 +355,62 @@ class AgentProfileConfig:
                 "auxiliary_loss_weight",
                 float(self.auxiliary_loss_weight),
             )
+            if self.recurrent_pricing_config is None:
+                object.__setattr__(
+                    self,
+                    "recurrent_pricing_config",
+                    RecurrentSACPricingAgentConfig(
+                        architecture=architecture,
+                        learning_sequence_length=int(self.sequence_length),
+                        episode_replay_capacity=int(
+                            self.episode_replay_capacity
+                        ),
+                        opponent_embedding_dimension=int(
+                            self.opponent_embedding_dim
+                        ),
+                        encoder_hidden_dimension=int(self.encoder_hidden_dim),
+                        encoder_learning_rate=3e-4,
+                        auxiliary_loss_weight=float(
+                            self.auxiliary_loss_weight
+                        ),
+                    ),
+                )
+        if architecture is AgentArchitecture.SAC:
+            if self.recurrent_pricing_config is not None:
+                raise ProtocolConfigError(
+                    "sac rejects recurrent pricing hyperparameters"
+                )
+        elif (
+            not isinstance(
+                self.recurrent_pricing_config,
+                RecurrentSACPricingAgentConfig,
+            )
+            or self.recurrent_pricing_config.architecture is not architecture
+        ):
+            raise ProtocolConfigError(
+                "recurrent_pricing_config architecture mismatch"
+            )
+        if self.recurrent_pricing_config is not None:
+            recurrent = self.recurrent_pricing_config
+            if (
+                recurrent.learning_sequence_length != self.sequence_length
+                or recurrent.episode_replay_capacity
+                != self.episode_replay_capacity
+            ):
+                raise ProtocolConfigError(
+                    "Recurrent profile sequence settings disagree"
+                )
+            if architecture is AgentArchitecture.OE_RSAC and (
+                recurrent.opponent_embedding_dimension
+                != self.opponent_embedding_dim
+                or recurrent.encoder_hidden_dimension
+                != self.encoder_hidden_dim
+                or recurrent.auxiliary_loss_weight
+                != self.auxiliary_loss_weight
+            ):
+                raise ProtocolConfigError(
+                    "OE-RSAC profile encoder settings disagree"
+                )
 
     def _reject_present(self, field_names: Iterable[str]) -> None:
         present = [name for name in field_names if getattr(self, name) is not None]
@@ -362,16 +432,32 @@ class AgentProfileConfig:
         result: dict[str, Any] = {"architecture": self.architecture.value}
         if self.sac_pricing_config is not None:
             result.update(self.sac_pricing_config.to_dict())
-        for field_name in (
-            "sequence_length",
-            "episode_replay_capacity",
-            "opponent_embedding_dim",
-            "encoder_hidden_dim",
-            "auxiliary_loss_weight",
-        ):
-            value = getattr(self, field_name)
-            if value is not None:
-                result[field_name] = value
+        if self.recurrent_pricing_config is not None:
+            recurrent_values = self.recurrent_pricing_config.to_dict()
+            recurrent_values.pop("architecture", None)
+            recurrent_values["sequence_length"] = recurrent_values.pop(
+                "learning_sequence_length"
+            )
+            if "opponent_embedding_dimension" in recurrent_values:
+                recurrent_values["opponent_embedding_dim"] = (
+                    recurrent_values.pop("opponent_embedding_dimension")
+                )
+            if "encoder_hidden_dimension" in recurrent_values:
+                recurrent_values["encoder_hidden_dim"] = (
+                    recurrent_values.pop("encoder_hidden_dimension")
+                )
+            result.update(recurrent_values)
+        else:
+            for field_name in (
+                "sequence_length",
+                "episode_replay_capacity",
+                "opponent_embedding_dim",
+                "encoder_hidden_dim",
+                "auxiliary_loss_weight",
+            ):
+                value = getattr(self, field_name)
+                if value is not None:
+                    result[field_name] = value
         return result
 
 
@@ -1258,7 +1344,15 @@ def _parse_agent_profiles(
         "auxiliary_loss_weight",
     }
     sac_fields = set(SACPricingAgentConfig.__dataclass_fields__)
-    allowed = recurrent_fields | sac_fields
+    recurrent_config_fields = set(
+        RecurrentSACPricingAgentConfig.__dataclass_fields__
+    ) - {
+        "architecture",
+        "learning_sequence_length",
+        "episode_replay_capacity",
+        "auxiliary_loss_weight",
+    }
+    allowed = recurrent_fields | sac_fields | recurrent_config_fields
     for raw_name, raw_profile in raw_profiles.items():
         try:
             architecture = AgentArchitecture(raw_name)
@@ -1276,12 +1370,20 @@ def _parse_agent_profiles(
         sac_values = {
             field_name: profile_values.pop(field_name)
             for field_name in tuple(profile_values)
-            if field_name in sac_fields
+            if architecture is AgentArchitecture.SAC
+            and field_name in sac_fields
         }
-        if sac_values and architecture is not AgentArchitecture.SAC:
+        recurrent_values = {
+            field_name: profile_values.pop(field_name)
+            for field_name in tuple(profile_values)
+            if architecture is not AgentArchitecture.SAC
+            and field_name in recurrent_config_fields
+        }
+        architecture_unknown = set(profile_values) - recurrent_fields
+        if architecture_unknown:
             raise ProtocolConfigError(
-                f"{architecture.value} rejects SAC pricing fields: "
-                + ", ".join(sorted(sac_values))
+                f"{architecture.value} rejects fields: "
+                + ", ".join(sorted(architecture_unknown))
             )
         try:
             sac_config = (
@@ -1293,9 +1395,36 @@ def _parse_agent_profiles(
             raise ProtocolConfigError(
                 f"Invalid SAC profile in {location}:{raw_name}: {exc}"
             ) from exc
+        recurrent_config = None
+        if architecture is not AgentArchitecture.SAC:
+            try:
+                recurrent_config = RecurrentSACPricingAgentConfig(
+                    architecture=architecture,
+                    learning_sequence_length=int(
+                        profile_values["sequence_length"]
+                    ),
+                    episode_replay_capacity=int(
+                        profile_values["episode_replay_capacity"]
+                    ),
+                    opponent_embedding_dimension=profile_values.get(
+                        "opponent_embedding_dim"
+                    ),
+                    encoder_hidden_dimension=profile_values.get(
+                        "encoder_hidden_dim"
+                    ),
+                    auxiliary_loss_weight=profile_values.get(
+                        "auxiliary_loss_weight"
+                    ),
+                    **recurrent_values,
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ProtocolConfigError(
+                    f"Invalid recurrent profile in {location}:{raw_name}: {exc}"
+                ) from exc
         profiles[architecture] = AgentProfileConfig(
             **profile_values,
             sac_pricing_config=sac_config,
+            recurrent_pricing_config=recurrent_config,
         )
     return profiles
 

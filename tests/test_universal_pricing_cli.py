@@ -77,6 +77,7 @@ class UniversalPricingCliTests(unittest.TestCase):
                     "truncated_skew_normal",
                     "--seed-index",
                     "0",
+                    "--validate-only",
                 ]
             )
         self.assertIn("Validated universal pricing run", output.getvalue())

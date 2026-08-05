@@ -229,3 +229,42 @@ class UniversalPricingReplayBuffer:
 
     def set_rng_state(self, state: Mapping[str, Any]) -> None:
         self._rng.bit_generator.state = dict(state)
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "capacity": self.capacity,
+            "size": self._size,
+            "next_index": self._next_index,
+            "observations": self._observations[: self._size].copy(),
+            "actions": self._actions[: self._size].copy(),
+            "rewards": self._rewards[: self._size].copy(),
+            "next_observations": self._next_observations[: self._size].copy(),
+            "dones": self._dones[: self._size].copy(),
+            "decision_masks": self._decision_masks[: self._size].copy(),
+            "opponent_controls": self._opponent_controls[: self._size].copy(),
+            "rng_state": self._rng.bit_generator.state,
+        }
+
+    def load_state_dict(self, state: Mapping[str, Any]) -> None:
+        if state.get("capacity") != self.capacity:
+            raise ValueError("Incompatible replay capacity")
+        size = int(state["size"])
+        if size < 0 or size > self.capacity:
+            raise ValueError("Invalid replay size")
+        mappings = (
+            ("observations", self._observations),
+            ("actions", self._actions),
+            ("rewards", self._rewards),
+            ("next_observations", self._next_observations),
+            ("dones", self._dones),
+            ("decision_masks", self._decision_masks),
+            ("opponent_controls", self._opponent_controls),
+        )
+        for name, target in mappings:
+            values = np.asarray(state[name], dtype=np.float32)
+            if values.shape != target[:size].shape:
+                raise ValueError(f"Incompatible replay state field: {name}")
+            target[:size] = values
+        self._size = size
+        self._next_index = int(state["next_index"])
+        self._rng.bit_generator.state = dict(state["rng_state"])

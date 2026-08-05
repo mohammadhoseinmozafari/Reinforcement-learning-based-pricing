@@ -293,6 +293,9 @@ class PricingAgent(Protocol):
     def update(self, replay_batch: Mapping[str, Any]) -> Mapping[str, float]:
         ...
 
+    def observe_transition(self, transition: Any) -> None:
+        ...
+
     def reset_recurrent_state(self) -> None:
         ...
 
