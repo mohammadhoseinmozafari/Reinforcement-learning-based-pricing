@@ -10,7 +10,7 @@ observation_contract_version: pricing_observation_v1
 curriculum_id: mixed_balanced
 regime_commitment_length: 10
 reward_specification: normalized_raw_profit
-artifact_root: experiments/universal_pricing_v1_pilots/day5_anchor_pilots
+artifact_root: experiments/pilots/
 
 opponent_pool_config: ../curricula/universal_mixed.yaml
 seed_manifest: ../seeds/universal_pricing_v1.yaml

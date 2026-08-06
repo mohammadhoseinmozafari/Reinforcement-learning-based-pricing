@@ -1,0 +1,11 @@
+{
+  "environment_steps": 50000,
+  "environment_wall_seconds": 92.16829469861113,
+  "final_checkpoint_bytes": 3211339,
+  "parameter_count": 213005.0,
+  "peak_cuda_memory_bytes": 78390272,
+  "phase": "efficiency",
+  "policy_wall_seconds": 64.71836780244485,
+  "total_wall_seconds": 1227.2325427999895,
+  "update_wall_seconds": 938.6537226997025
+}

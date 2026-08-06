@@ -1,13 +1,13 @@
 {
   "artifact_references": {
-    "final_checkpoint": "experiments/universal_pricing_v1_pilots/day5_anchor_pilots/mixed_balanced/sac/location-uniform__strategicness-uniform__exclusivity-uniform/seed-0/checkpoints/final.pt",
-    "latest_metrics": "experiments/universal_pricing_v1_pilots/day5_anchor_pilots/mixed_balanced/sac/location-uniform__strategicness-uniform__exclusivity-uniform/seed-0/latest_metrics.json",
-    "latest_training_snapshot": "experiments/universal_pricing_v1_pilots/day5_anchor_pilots/mixed_balanced/sac/location-uniform__strategicness-uniform__exclusivity-uniform/seed-0/checkpoints/latest_training_state.pt",
-    "metrics": "experiments/universal_pricing_v1_pilots/day5_anchor_pilots/mixed_balanced/sac/location-uniform__strategicness-uniform__exclusivity-uniform/seed-0/metrics.jsonl"
+    "final_checkpoint": "experiments\\pilots\\mixed_balanced\\oe_rsac\\location-uniform__strategicness-uniform__exclusivity-uniform\\seed-0\\checkpoints\\final.pt",
+    "latest_metrics": "experiments\\pilots\\mixed_balanced\\oe_rsac\\location-uniform__strategicness-uniform__exclusivity-uniform\\seed-0\\latest_metrics.json",
+    "latest_training_snapshot": "experiments\\pilots\\mixed_balanced\\oe_rsac\\location-uniform__strategicness-uniform__exclusivity-uniform\\seed-0\\checkpoints\\latest_training_state.pt",
+    "metrics": "experiments\\pilots\\mixed_balanced\\oe_rsac\\location-uniform__strategicness-uniform__exclusivity-uniform\\seed-0\\metrics.jsonl"
   },
-  "configuration_hash": "0ac94dad76e9cc41ef5c63f04965701d79c01358cba95ba8c6f88bc9e3bc422d",
+  "configuration_hash": "deabdf4f38c28e4a465d51f6382732d139c23042afcebe7546af3a19607964cf",
   "coordinate": {
-    "agent_architecture": "sac",
+    "agent_architecture": "oe_rsac",
     "curriculum_id": "mixed_balanced",
     "distribution_combination": {
       "exclusivity": "uniform",
@@ -16,14 +16,14 @@
     },
     "training_seed_index": 0
   },
-  "git_commit": "9a6d62644ddb69ef32a517d8586eeee89f109ea3",
+  "git_commit": "0c6cae94ce29cb0cea606a1a10d1d6ffa310ec2e",
   "hardware_metadata": {
-    "device": "cpu",
-    "numpy": "2.5.0",
-    "parameter_count": 217101,
-    "platform": "Linux-6.12.96+deb13-amd64-x86_64-with-glibc2.41",
-    "python": "3.13.5",
-    "torch": "2.12.1+cu130"
+    "device": "cuda",
+    "numpy": "2.3.5",
+    "parameter_count": 319536,
+    "platform": "Windows-10-10.0.19044-SP0",
+    "python": "3.14.5",
+    "torch": "2.9.1+cu130"
   },
   "protocol_version": "universal_pricing_v1",
   "resolved_protocol": {
@@ -107,7 +107,7 @@
         "uniform_price_target_entropy": -1.0
       }
     },
-    "artifact_root": "experiments/universal_pricing_v1_pilots/day5_anchor_pilots",
+    "artifact_root": "experiments\\pilots",
     "consumer_distributions": {
       "exclusivity": {
         "truncated_normal": {
@@ -345,7 +345,7 @@
       "warmup_steps": 500
     }
   },
-  "run_id": "universal_pricing_v1__mixed_balanced__sac__location-uniform__strategicness-uniform__exclusivity-uniform__seed-00",
+  "run_id": "universal_pricing_v1__mixed_balanced__oe_rsac__location-uniform__strategicness-uniform__exclusivity-uniform__seed-00",
   "run_seed_bundle": {
     "consumer_population_seed": 2991710405,
     "exploration_seed": 2429694426,
