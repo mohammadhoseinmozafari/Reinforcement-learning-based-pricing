@@ -1429,6 +1429,13 @@ OPPONENT_PRESETS = {
         "p_max": PRICE_UNIFORM_MAX,
         "margin": 0.25,
     },
+    # Compatibility alias retained for legacy experiment configurations.
+    "fixed_uniform": {
+        "policy_type": "fixed_uniform",
+        "p_min": PRICE_UNIFORM_MIN,
+        "p_max": PRICE_UNIFORM_MAX,
+        "margin": 0.25,
+    },
 
 }
 

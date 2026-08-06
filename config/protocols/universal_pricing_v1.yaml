@@ -1,0 +1,135 @@
+protocol_version: universal_pricing_v1
+action_contract_version: pricing_action_v1
+observation_contract_version: pricing_observation_v1
+curriculum_id: mixed_balanced
+regime_commitment_length: 10
+reward_specification: normalized_raw_profit
+artifact_root: experiments/universal_pricing_v1
+
+opponent_pool_config: ../curricula/universal_mixed.yaml
+seed_manifest: ../seeds/universal_pricing_v1.yaml
+
+agent_profiles:
+  sac:
+    architecture: sac
+    actor_hidden_dimensions: [256, 256]
+    critic_hidden_dimensions: [256, 256]
+    actor_learning_rate: 0.0003
+    critic_learning_rate: 0.0003
+    entropy_learning_rate: 0.0003
+    gamma: 0.99
+    tau: 0.005
+    initial_regime_temperature: 0.2
+    initial_uniform_price_temperature: 0.2
+    initial_bbp_price_temperature: 0.2
+    regime_target_entropy_ratio: 0.98
+    uniform_price_target_entropy: -1.0
+    bbp_price_target_entropy: -2.0
+    log_std_min: -5.0
+    log_std_max: 2.0
+    gradient_clip_norm: 10.0
+    replay_capacity: 300000
+    batch_size: 256
+  rsac:
+    architecture: rsac
+    sequence_length: 16
+    episode_replay_capacity: 1000
+    burn_in_length: 16
+    batch_size: 64
+    actor_hidden_dimension: 128
+    critic_hidden_dimension: 128
+    actor_learning_rate: 0.0003
+    critic_learning_rate: 0.0003
+    entropy_learning_rate: 0.0003
+    gamma: 0.99
+    tau: 0.005
+    initial_regime_temperature: 0.2
+    initial_uniform_price_temperature: 0.2
+    initial_bbp_price_temperature: 0.2
+    regime_target_entropy_ratio: 0.98
+    uniform_price_target_entropy: -1.0
+    bbp_price_target_entropy: -2.0
+    log_std_min: -5.0
+    log_std_max: 2.0
+    gradient_clip_norm: 10.0
+  oe_rsac:
+    architecture: oe_rsac
+    sequence_length: 16
+    episode_replay_capacity: 1000
+    opponent_embedding_dim: 32
+    encoder_hidden_dim: 128
+    auxiliary_loss_weight: 1.0
+    burn_in_length: 16
+    batch_size: 64
+    actor_hidden_dimension: 128
+    critic_hidden_dimension: 128
+    actor_learning_rate: 0.0003
+    critic_learning_rate: 0.0003
+    entropy_learning_rate: 0.0003
+    gamma: 0.99
+    tau: 0.005
+    initial_regime_temperature: 0.2
+    initial_uniform_price_temperature: 0.2
+    initial_bbp_price_temperature: 0.2
+    regime_target_entropy_ratio: 0.98
+    uniform_price_target_entropy: -1.0
+    bbp_price_target_entropy: -2.0
+    log_std_min: -5.0
+    log_std_max: 2.0
+    gradient_clip_norm: 10.0
+    encoder_learning_rate: 0.0003
+
+# Parameters are frozen here; Day 2 implements their independent samplers.
+consumer_distributions:
+  location:
+    uniform:
+      low: 0.0
+      high: 1.0
+    truncated_normal:
+      mean: 0.5
+      standard_deviation: 0.2
+      low: 0.0
+      high: 1.0
+    truncated_skew_normal:
+      location: 0.2457160185
+      scale: 0.3497947666
+      shape: 5.0
+      low: 0.0
+      high: 1.0
+  strategicness:
+    uniform:
+      low: 0.0
+      high: 1.0
+    truncated_normal:
+      mean: 0.5
+      standard_deviation: 0.2
+      low: 0.0
+      high: 1.0
+    truncated_skew_normal:
+      location: 0.2457160185
+      scale: 0.3497947666
+      shape: 5.0
+      low: 0.0
+      high: 1.0
+  exclusivity:
+    uniform:
+      low: 0.0
+      high: 1.0
+    truncated_normal:
+      mean: 0.5
+      standard_deviation: 0.2
+      low: 0.0
+      high: 1.0
+    truncated_skew_normal:
+      location: 0.2457160185
+      scale: 0.3497947666
+      shape: 5.0
+      low: 0.0
+      high: 1.0
+
+training_budget:
+  environment_steps: 300000
+  warmup_steps: 500
+  updates_per_step: 1
+  evaluation_interval_steps: 10000
+  checkpoint_interval_steps: 10000

@@ -1,4 +1,8 @@
-"""Evaluate a trained uniform-pricing agent against every BBP opponent."""
+"""Legacy evaluator for old 13-feature, fixed-regime SAC checkpoints.
+
+This command is not part of ``universal_pricing_v1``. Use
+``pricing_evaluate.py`` for manifests produced by the new protocol.
+"""
 
 import json
 import os

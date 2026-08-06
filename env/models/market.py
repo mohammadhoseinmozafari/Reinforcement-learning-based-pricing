@@ -845,11 +845,31 @@ class HotellingMarket:
         
         # Recreate consumers with fresh random attributes
         self.consumers = self._create_consumers()
-        
-        # Reset firms
+        self._reset_firms_and_period()
+
+    def install_consumer_population(self, population_snapshot) -> None:
+        """Install an explicitly generated population and reset market state.
+
+        This additive path is used by ``UniversalPricingEnv``. Legacy callers
+        continue to use :meth:`reset` and its original ``RandomState`` sampling.
+        """
+        from env.consumer_population import ConsumerPopulationSnapshot
+
+        if not isinstance(population_snapshot, ConsumerPopulationSnapshot):
+            raise TypeError(
+                "population_snapshot must be ConsumerPopulationSnapshot"
+            )
+        if population_snapshot.population_size != self.num_consumers:
+            raise ValueError(
+                "Population snapshot size must match market num_consumers"
+            )
+        self.consumers = population_snapshot.to_consumers()
+        self._reset_firms_and_period()
+
+    def _reset_firms_and_period(self) -> None:
+        """Reset firm histories and the market clock without resampling."""
         for firm in self.firms:
             firm.reset()
-        
         self.current_period = 0
 
     def get_consumer_stats(self) -> Dict[str, float]:
