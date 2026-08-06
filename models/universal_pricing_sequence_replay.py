@@ -232,6 +232,56 @@ class UniversalPricingSequenceReplayBuffer:
             "rng_state": self._rng.bit_generator.state,
         }
 
+    def diagnostics(self) -> dict[str, float]:
+        """Return episode and regime composition without sampling replay."""
+
+        transitions = [
+            transition
+            for episode in self._episodes
+            for transition in episode.transitions
+        ]
+        episode_count = len(self._episodes)
+        if not transitions:
+            return {
+                "replay_episode_count": float(episode_count),
+                "replay_transition_count": 0.0,
+                "replay_bbp_fraction": 0.0,
+                "replay_decision_fraction": 0.0,
+                "replay_mean_reward": 0.0,
+                "replay_bbp_opponent_episode_fraction": 0.0,
+            }
+        return {
+            "replay_episode_count": float(episode_count),
+            "replay_transition_count": float(len(transitions)),
+            "replay_bbp_fraction": float(
+                np.mean(
+                    [
+                        transition.effective_action[1]
+                        for transition in transitions
+                    ]
+                )
+            ),
+            "replay_decision_fraction": float(
+                np.mean(
+                    [
+                        transition.regime_decision_mask
+                        for transition in transitions
+                    ]
+                )
+            ),
+            "replay_mean_reward": float(
+                np.mean([transition.reward for transition in transitions])
+            ),
+            "replay_bbp_opponent_episode_fraction": float(
+                np.mean(
+                    [
+                        episode.opponent_family == "bbp"
+                        for episode in self._episodes
+                    ]
+                )
+            ),
+        }
+
     def load_state_dict(self, state: Mapping[str, Any]) -> None:
         expected = {
             "capacity_episodes": self.capacity_episodes,

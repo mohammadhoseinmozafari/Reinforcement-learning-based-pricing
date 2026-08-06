@@ -230,10 +230,83 @@ class UniversalPricingEvaluator:
             "mean_raw_agent_profit_total": float(
                 np.mean([item["raw_agent_profit_total"] for item in episodes])
             ),
+            "mean_raw_opponent_profit_total": float(
+                np.mean(
+                    [item["raw_opponent_profit_total"] for item in episodes]
+                )
+            ),
             "mean_profit_advantage_total": float(
                 np.mean([item["profit_advantage_total"] for item in episodes])
             ),
+            "mean_bbp_period_fraction": float(
+                np.mean([item["bbp_period_fraction"] for item in episodes])
+            ),
+            "mean_regime_change_count": float(
+                np.mean([item["regime_change_count"] for item in episodes])
+            ),
+            "mean_uniform_price": float(
+                np.mean([item["mean_uniform_price"] for item in episodes])
+            ),
+            "mean_bbp_new_price": float(
+                np.mean([item["mean_bbp_new_price"] for item in episodes])
+            ),
+            "mean_bbp_old_price": float(
+                np.mean([item["mean_bbp_old_price"] for item in episodes])
+            ),
+            "mean_bbp_price_spread": float(
+                np.mean(
+                    [item["mean_bbp_price_spread"] for item in episodes]
+                )
+            ),
+            "mean_market_share": float(
+                np.mean([item["mean_market_share"] for item in episodes])
+            ),
+            "mean_retention_rate": float(
+                np.mean([item["mean_retention_rate"] for item in episodes])
+            ),
             "mean_inference_seconds": float(np.mean(inference_times)),
+        }
+        summary["by_opponent_family"] = {
+            family: {
+                "episode_count": len(family_episodes),
+                "mean_raw_agent_profit_total": float(
+                    np.mean(
+                        [
+                            item["raw_agent_profit_total"]
+                            for item in family_episodes
+                        ]
+                    )
+                ),
+                "mean_profit_advantage_total": float(
+                    np.mean(
+                        [
+                            item["profit_advantage_total"]
+                            for item in family_episodes
+                        ]
+                    )
+                ),
+                "mean_bbp_period_fraction": float(
+                    np.mean(
+                        [
+                            item["bbp_period_fraction"]
+                            for item in family_episodes
+                        ]
+                    )
+                ),
+                "mean_market_share": float(
+                    np.mean(
+                        [item["mean_market_share"] for item in family_episodes]
+                    )
+                ),
+            }
+            for family in ("uniform", "bbp")
+            for family_episodes in [
+                [
+                    item
+                    for item in episodes
+                    if item["opponent_family"] == family
+                ]
+            ]
         }
         if output_directory is not None:
             UniversalPricingEvaluationRepository().write(

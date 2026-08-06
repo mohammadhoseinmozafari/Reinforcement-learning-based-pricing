@@ -358,6 +358,13 @@ Tasks:
 | `UniversalPricingTrainer` | Runs fixed-step training, logging, checkpointing, interruption, and exact resume. |
 | `UniversalPricingTrainingSnapshot` | Stores the complete episode-boundary continuation state. |
 | `UniversalPricingEvaluator` | Runs balanced deterministic validation and final evaluation from the final checkpoint. |
+| `UniversalPricingEpisodeMetrics` | Aggregates per-episode economics, regimes, prices, policy probabilities, market share, and retention. |
+| `UniversalPricingTrainingLogger` | Provides live terminal progress plus atomic metric history and latest-metric artifacts. |
+
+Universal observability records training losses, gradient norms, entropy
+temperatures, policy-head statistics, replay composition, economic outcomes,
+timing, checkpoints, and validation results by opponent family. Non-finite
+metrics fail the run instead of being serialized as ambiguous JSON values.
 
 Exit gate:
 

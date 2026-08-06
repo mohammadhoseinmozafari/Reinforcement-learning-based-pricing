@@ -230,6 +230,29 @@ class UniversalPricingReplayBuffer:
     def set_rng_state(self, state: Mapping[str, Any]) -> None:
         self._rng.bit_generator.state = dict(state)
 
+    def diagnostics(self) -> dict[str, float]:
+        """Return replay composition without consuming the sampling RNG."""
+
+        if self._size == 0:
+            return {
+                "replay_transition_count": 0.0,
+                "replay_bbp_fraction": 0.0,
+                "replay_decision_fraction": 0.0,
+                "replay_mean_reward": 0.0,
+            }
+        return {
+            "replay_transition_count": float(self._size),
+            "replay_bbp_fraction": float(
+                np.mean(self._actions[: self._size, 1])
+            ),
+            "replay_decision_fraction": float(
+                np.mean(self._decision_masks[: self._size])
+            ),
+            "replay_mean_reward": float(
+                np.mean(self._rewards[: self._size])
+            ),
+        }
+
     def state_dict(self) -> dict[str, Any]:
         return {
             "capacity": self.capacity,

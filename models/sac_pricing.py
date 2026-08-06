@@ -352,6 +352,8 @@ class SACPricingUpdateMetrics:
     q1_mean: float
     q2_mean: float
     decision_fraction: float
+    critic_gradient_norm: float
+    actor_gradient_norm: float
 
     def to_dict(self) -> dict[str, float]:
         return asdict(self)
@@ -936,7 +938,7 @@ class SACPricingAgent:
         critic_loss = F.mse_loss(q1, targets) + F.mse_loss(q2, targets)
         self.critic_optimizer.zero_grad(set_to_none=True)
         critic_loss.backward()
-        nn.utils.clip_grad_norm_(
+        critic_gradient_norm = nn.utils.clip_grad_norm_(
             list(self.critic_1.parameters())
             + list(self.critic_2.parameters()),
             self.config.gradient_clip_norm,
@@ -951,7 +953,7 @@ class SACPricingAgent:
             tensors["regime_decision_masks"],
         )
         actor_loss.backward()
-        nn.utils.clip_grad_norm_(
+        actor_gradient_norm = nn.utils.clip_grad_norm_(
             self.actor.parameters(),
             self.config.gradient_clip_norm,
         )
@@ -1004,6 +1006,12 @@ class SACPricingAgent:
             decision_fraction=float(
                 tensors["regime_decision_masks"].mean().detach().cpu()
             ),
+            critic_gradient_norm=float(
+                critic_gradient_norm.detach().cpu()
+            ),
+            actor_gradient_norm=float(
+                actor_gradient_norm.detach().cpu()
+            ),
         )
         return metrics.to_dict()
 
@@ -1036,8 +1044,16 @@ class SACPricingAgent:
                 "parameter_count": float(
                     sum(
                         parameter.numel()
-                        for parameter in self.actor.parameters()
+                        for module in (
+                            self.actor,
+                            self.critic_1,
+                            self.critic_2,
+                        )
+                        for parameter in module.parameters()
                     )
+                    + self.log_regime_temperature.numel()
+                    + self.log_uniform_price_temperature.numel()
+                    + self.log_bbp_price_temperature.numel()
                 ),
                 "environment_steps": float(self.environment_steps),
                 "update_steps": float(self.update_steps),

@@ -1,5 +1,8 @@
+import json
+import os
+from pathlib import Path
 import re
-from typing import Any, List
+from typing import Any, List, Mapping, Sequence
 
 import numpy as np
 
@@ -137,6 +140,249 @@ class Box:
 # ----------------------------------------------------------------------
 # Logger
 # ----------------------------------------------------------------------
+
+class UniversalPricingTrainingLogger:
+    """Console and atomic JSONL observability for universal-pricing runs."""
+
+    def __init__(
+        self,
+        metrics_path: str | Path,
+        *,
+        verbose: bool = True,
+    ) -> None:
+        self.metrics_path = Path(metrics_path)
+        self.latest_metrics_path = self.metrics_path.with_name(
+            "latest_metrics.json"
+        )
+        self.verbose = verbose
+
+    @staticmethod
+    def _validate_finite(value: Any, location: str = "record") -> None:
+        if isinstance(value, Mapping):
+            for name, item in value.items():
+                UniversalPricingTrainingLogger._validate_finite(
+                    item, f"{location}.{name}"
+                )
+        elif isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            for index, item in enumerate(value):
+                UniversalPricingTrainingLogger._validate_finite(
+                    item, f"{location}[{index}]"
+                )
+        elif isinstance(value, (float, np.floating)) and not np.isfinite(value):
+            raise ValueError(f"Non-finite metric at {location}: {value}")
+
+    @staticmethod
+    def _atomic_json(path: Path, value: Any) -> None:
+        temporary = path.with_name(f".{path.name}.temporary")
+        with temporary.open("w", encoding="utf-8") as stream:
+            json.dump(value, stream, sort_keys=True, indent=2, allow_nan=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+
+    def write_metric_records(
+        self, records: Sequence[Mapping[str, Any]]
+    ) -> None:
+        """Atomically persist the metric history and latest status record."""
+
+        for index, record in enumerate(records):
+            self._validate_finite(record, f"records[{index}]")
+        self.metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.metrics_path.with_name(
+            f".{self.metrics_path.name}.temporary"
+        )
+        with temporary.open("w", encoding="utf-8") as stream:
+            for record in records:
+                stream.write(
+                    json.dumps(record, sort_keys=True, allow_nan=False) + "\n"
+                )
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, self.metrics_path)
+        if records:
+            self._atomic_json(self.latest_metrics_path, records[-1])
+
+    def log_run_start(
+        self,
+        *,
+        run_id: str,
+        architecture: str,
+        distributions: str,
+        environment_steps: int,
+        warmup_steps: int,
+        device: str,
+        parameter_count: int,
+        run_directory: str | Path,
+        resumed: bool,
+    ) -> None:
+        if not self.verbose:
+            return
+        box_width = max(
+            88,
+            visible_len(run_id) + 18,
+            visible_len(str(run_directory)) + 18,
+        )
+        box = Box(
+            box_width,
+            color=Color.MAGENTA if resumed else Color.CYAN,
+        )
+        title = "UNIVERSAL PRICING RESUME" if resumed else "UNIVERSAL PRICING"
+        print()
+        print(box.top(title))
+        print(box.row(f"{Color.BOLD}Run{Color.END}           {run_id}"))
+        print(
+            box.row_cols(
+                f"Agent: {Color.GREEN}{architecture}{Color.END}",
+                f"Device: {Color.GREEN}{device}{Color.END}",
+                42,
+            )
+        )
+        print(box.row(f"Population     {distributions}"))
+        print(
+            box.row_cols(
+                f"Budget: {Color.GREEN}{fmt_num(environment_steps)} steps"
+                f"{Color.END}",
+                f"Warmup: {Color.YELLOW}{fmt_num(warmup_steps)}{Color.END}",
+                42,
+            )
+        )
+        print(
+            box.row(
+                f"Parameters     {Color.GREEN}{fmt_num(parameter_count)}"
+                f"{Color.END}"
+            )
+        )
+        print(box.row(f"Artifacts      {run_directory}"))
+        print(box.bottom())
+        print()
+
+    def log_episode(
+        self,
+        record: Mapping[str, Any],
+        *,
+        budget_steps: int,
+    ) -> None:
+        if not self.verbose:
+            return
+        steps = int(record["environment_steps"])
+        progress = 100.0 * steps / max(budget_steps, 1)
+        critic = record.get("mean_critic_loss")
+        actor = record.get("mean_actor_loss")
+        critic_gradient = record.get("mean_critic_gradient_norm")
+        actor_gradient = record.get("mean_actor_gradient_norm")
+        loss_text = (
+            f" Lq:{float(critic):.3g} Lπ:{float(actor):.3g}"
+            f" gq:{float(critic_gradient):.2g}"
+            f" gπ:{float(actor_gradient):.2g}"
+            if critic is not None and actor is not None
+            and critic_gradient is not None and actor_gradient is not None
+            else " warmup"
+        )
+        policy_text = (
+            f" Pbbp:{100 * float(record['mean_bbp_regime_probability']):4.1f}% "
+            if "mean_bbp_regime_probability" in record
+            else ""
+        )
+        print(
+            f"{Color.CYAN}[train]{Color.END} "
+            f"ep:{int(record['episode_index']):04d} "
+            f"step:{steps:>7}/{budget_steps:<7} ({progress:5.1f}%) "
+            f"opp:{str(record['opponent_family']):<7} "
+            f"profit:{float(record['raw_agent_profit_total']):8.1f} "
+            f"Δ:{float(record['profit_advantage_total']):+8.1f} "
+            f"BBP:{100 * float(record['agent_bbp_period_fraction']):5.1f}% "
+            f"{policy_text}"
+            f"share:{float(record['mean_market_share']):.3f} "
+            f"retain:{float(record['mean_retention_rate']):.3f} "
+            f"replay:{int(record['replay_size']):>5}"
+            f" {str(record['replay_unit'])[:3]}"
+            f"/{100 * float(record['replay_bbp_fraction']):.0f}%BBP"
+            f"{loss_text} "
+            f"time:{float(record['episode_wall_seconds']):.2f}s",
+            flush=True,
+        )
+
+    def log_validation(self, record: Mapping[str, Any]) -> None:
+        if not self.verbose:
+            return
+        box = Box(76, color=Color.GREEN)
+        print()
+        print(
+            box.top(
+                f"VALIDATION @ {fmt_num(record['environment_steps'])} STEPS"
+            )
+        )
+        print(
+            box.row_cols(
+                "Mean episode profit",
+                f"{float(record['mean_raw_agent_profit_total']):.2f}",
+                42,
+            )
+        )
+        print(
+            box.row_cols(
+                "Mean profit advantage",
+                f"{float(record['mean_profit_advantage_total']):+.2f}",
+                42,
+            )
+        )
+        print(
+            box.row_cols(
+                "Mean normalized reward",
+                f"{float(record['mean_normalized_reward_total']):.4f}",
+                42,
+            )
+        )
+        if "mean_bbp_period_fraction" in record:
+            print(
+                box.row_cols(
+                    "Mean BBP period fraction",
+                    f"{100 * float(record['mean_bbp_period_fraction']):.1f}%",
+                    42,
+                )
+            )
+        print(
+            box.row_cols(
+                "Evaluation episodes",
+                str(int(record["episode_count"])),
+                42,
+            )
+        )
+        print(box.bottom())
+        print()
+
+    def log_checkpoint(self, checkpoint: str | Path, steps: int) -> None:
+        if self.verbose:
+            print(
+                f"{Color.BLUE}[checkpoint]{Color.END} "
+                f"step:{steps} path:{checkpoint}",
+                flush=True,
+            )
+
+    def log_terminal(
+        self,
+        status: str,
+        *,
+        environment_steps: int,
+        message: str | None = None,
+    ) -> None:
+        if not self.verbose:
+            return
+        color = {
+            "completed": Color.GREEN,
+            "interrupted": Color.YELLOW,
+            "failed": Color.RED,
+        }.get(status, Color.CYAN)
+        suffix = f" — {message}" if message else ""
+        print(
+            f"{color}[{status}]{Color.END} "
+            f"environment_steps:{environment_steps}{suffix}",
+            flush=True,
+        )
+
 
 class CurriculumTrainingLogger:
 

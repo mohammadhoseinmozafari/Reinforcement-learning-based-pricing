@@ -25,9 +25,29 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL_PATH = (
     REPOSITORY_ROOT / "config/protocols/universal_pricing_v1.yaml"
 )
+PILOT_PROTOCOL_PATH = (
+    REPOSITORY_ROOT
+    / "config/protocols/universal_pricing_v1_pilot.yaml"
+)
 
 
 class UniversalPricingCliTests(unittest.TestCase):
+    def test_pilot_protocol_has_isolated_root_and_fifty_thousand_steps(
+        self,
+    ) -> None:
+        production = load_universal_pricing_protocol(PROTOCOL_PATH)
+        pilot = load_universal_pricing_protocol(PILOT_PROTOCOL_PATH)
+        self.assertEqual(pilot.training_budget.environment_steps, 50_000)
+        self.assertNotEqual(pilot.artifact_root, production.artifact_root)
+        self.assertEqual(
+            pilot.seed_manifest,
+            production.seed_manifest,
+        )
+        self.assertEqual(
+            set(pilot.agent_profiles),
+            set(production.agent_profiles),
+        )
+
     def test_legacy_and_protocol_modes_are_mutually_exclusive(self) -> None:
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
@@ -130,6 +150,19 @@ class UniversalPricingEvaluationCliTests(unittest.TestCase):
                 ),
                 100,
             )
+
+    def test_evaluation_parser_accepts_pilot_protocol(self) -> None:
+        arguments = pricing_evaluate.parse_args(
+            [
+                "--run-directory",
+                "pilot-run",
+                "--protocol",
+                str(PILOT_PROTOCOL_PATH),
+                "--evaluation-suite",
+                "validation",
+            ]
+        )
+        self.assertEqual(arguments.protocol, PILOT_PROTOCOL_PATH)
 
     def test_malformed_manifest_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

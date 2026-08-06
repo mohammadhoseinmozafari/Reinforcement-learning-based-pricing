@@ -212,6 +212,8 @@ class HybridActionTests(SACPricingAgentTestCase):
             "q1_mean",
             "q2_mean",
             "decision_fraction",
+            "critic_gradient_norm",
+            "actor_gradient_norm",
         }
         self.assertEqual(set(metrics), expected)
         self.assertTrue(all(np.isfinite(value) for value in metrics.values()))

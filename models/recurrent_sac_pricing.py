@@ -503,6 +503,15 @@ class _UniversalRecurrentSACPricingAgent:
             "uniform_regime_probability": float(probabilities[0, 0, 0]),
             "bbp_regime_probability": float(probabilities[0, 0, 1]),
             "selected_regime": float(regime),
+            "uniform_mean": float(policy.uniform_mean[0, 0, 0]),
+            "uniform_log_std": float(policy.uniform_log_std[0, 0, 0]),
+            "bbp_new_mean": float(policy.bbp_mean[0, 0, 0]),
+            "bbp_premium_mean": float(policy.bbp_mean[0, 0, 1]),
+            "regime_temperature": float(self.temperatures[0].detach()),
+            "uniform_price_temperature": float(
+                self.temperatures[1].detach()
+            ),
+            "bbp_price_temperature": float(self.temperatures[2].detach()),
             "actor_hidden_norm": float(self._actor_hidden.norm()),
         }
         return PricingAction(PricingRegime(regime), *values)
@@ -730,13 +739,14 @@ class _UniversalRecurrentSACPricingAgent:
         if self.encoder_optimizer is not None:
             self.encoder_optimizer.zero_grad(set_to_none=True)
         combined_critic_loss.backward()
-        nn.utils.clip_grad_norm_(
+        critic_gradient_norm = nn.utils.clip_grad_norm_(
             list(self.critic_1.parameters()) + list(self.critic_2.parameters()),
             self.config.gradient_clip_norm,
         )
         self.critic_optimizer.step()
+        encoder_gradient_norm = torch.zeros((), device=self.device)
         if self.encoder_optimizer is not None:
-            nn.utils.clip_grad_norm_(
+            encoder_gradient_norm = nn.utils.clip_grad_norm_(
                 self.opponent_encoder.parameters(),
                 self.config.gradient_clip_norm,
             )
@@ -780,7 +790,7 @@ class _UniversalRecurrentSACPricingAgent:
         )
         self.actor_optimizer.zero_grad(set_to_none=True)
         actor_loss.backward()
-        nn.utils.clip_grad_norm_(
+        actor_gradient_norm = nn.utils.clip_grad_norm_(
             self.actor.parameters(), self.config.gradient_clip_norm
         )
         self.actor_optimizer.step()
@@ -803,6 +813,12 @@ class _UniversalRecurrentSACPricingAgent:
             "uniform_price_temperature": float(self.temperatures[1].detach()),
             "bbp_price_temperature": float(self.temperatures[2].detach()),
             "decision_fraction": float(_masked_mean(regime_mask, loss_mask)),
+            "target_q_mean": float(_masked_mean(target, loss_mask).detach()),
+            "q1_mean": float(_masked_mean(q1, loss_mask).detach()),
+            "q2_mean": float(_masked_mean(q2, loss_mask).detach()),
+            "critic_gradient_norm": float(critic_gradient_norm.detach()),
+            "actor_gradient_norm": float(actor_gradient_norm.detach()),
+            "encoder_gradient_norm": float(encoder_gradient_norm.detach()),
         }
 
     def _update_temperatures(
@@ -901,7 +917,19 @@ class _UniversalRecurrentSACPricingAgent:
         modules = [self.actor, self.critic_1, self.critic_2]
         if self.opponent_encoder is not None:
             modules.append(self.opponent_encoder)
-        return [parameter for module in modules for parameter in module.parameters()]
+        parameters = [
+            parameter
+            for module in modules
+            for parameter in module.parameters()
+        ]
+        parameters.extend(
+            [
+                self.log_regime_temperature,
+                self.log_uniform_temperature,
+                self.log_bbp_temperature,
+            ]
+        )
+        return parameters
 
     def _payload(self) -> dict[str, Any]:
         payload = {

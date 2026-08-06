@@ -40,6 +40,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, help="Override training episode count")
     parser.add_argument("--seed", type=int, help="Override random seed")
     parser.add_argument("--device", help="Override Torch device, such as cpu or cuda")
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Disable live universal-pricing console metrics",
+    )
     parser.add_argument("--save-dir", help="Override experiment output directory")
     parser.add_argument(
         "--training-config",
@@ -179,6 +184,7 @@ def _run_protocol_mode(args: argparse.Namespace) -> None:
         coordinate,
         device=args.device or "cpu",
         resume=args.resume,
+        verbose=not args.quiet,
     )
     manifest = trainer.train()
     print(f"\nRun finished with status: {manifest.status.value}")

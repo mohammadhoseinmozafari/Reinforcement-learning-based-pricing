@@ -15,6 +15,13 @@ from train.universal_pricing_protocol import (
     load_universal_pricing_protocol,
 )
 
+DEFAULT_PROTOCOL_PATH = (
+    Path(__file__).resolve().parent
+    / "config"
+    / "protocols"
+    / "universal_pricing_v1.yaml"
+)
+
 
 class EvaluationSuite(str, Enum):
     """Seed bank selected for checkpoint evaluation."""
@@ -30,6 +37,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         required=True,
         help="Directory containing manifest.json for one universal run",
+    )
+    parser.add_argument(
+        "--protocol",
+        type=Path,
+        default=DEFAULT_PROTOCOL_PATH,
+        help=(
+            "Resolved protocol used to train the run; defaults to the "
+            "production universal_pricing_v1 protocol"
+        ),
     )
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
@@ -91,13 +107,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     if manifest.status.value != "completed":
         raise SystemExit("Evaluation requires a completed training run")
-    protocol_path = (
-        Path(__file__).resolve().parent
-        / "config"
-        / "protocols"
-        / "universal_pricing_v1.yaml"
-    )
-    protocol = load_universal_pricing_protocol(protocol_path)
+    protocol = load_universal_pricing_protocol(args.protocol)
     if protocol.to_dict() != dict(manifest.resolved_protocol):
         raise SystemExit(
             "Evaluation protocol does not match the run manifest"

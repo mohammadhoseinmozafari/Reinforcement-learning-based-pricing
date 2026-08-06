@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import json
 import math
 import os
 from pathlib import Path
@@ -28,6 +27,8 @@ from models.universal_pricing_replay import UniversalPricingTransition
 from models.universal_pricing_sequence_replay import (
     UniversalPricingEpisodeBuilder,
 )
+from train.logger import UniversalPricingTrainingLogger
+from train.metrics import UniversalPricingEpisodeMetrics
 from train.universal_pricing_protocol import (
     ArtifactLayout,
     ExperimentCoordinate,
@@ -130,6 +131,8 @@ class UniversalPricingTrainer:
         resume: bool = False,
         budget: TrainingBudgetConfig | None = None,
         run_validation: bool = True,
+        verbose: bool = True,
+        logger: UniversalPricingTrainingLogger | None = None,
     ) -> None:
         self.protocol = protocol
         self.coordinate = coordinate
@@ -176,6 +179,10 @@ class UniversalPricingTrainer:
         self._manifest_repository = ManifestRepository()
         self._snapshot_repository = (
             UniversalPricingTrainingSnapshotRepository()
+        )
+        self.logger = logger or UniversalPricingTrainingLogger(
+            self.metrics_path,
+            verbose=verbose,
         )
 
     @staticmethod
@@ -276,16 +283,7 @@ class UniversalPricingTrainer:
         )
 
     def _write_metrics(self) -> None:
-        self.metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.metrics_path.with_name(
-            f".{self.metrics_path.name}.temporary"
-        )
-        with temporary.open("w", encoding="utf-8") as stream:
-            for record in self.metric_records:
-                stream.write(json.dumps(record, sort_keys=True) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, self.metrics_path)
+        self.logger.write_metric_records(self.metric_records)
 
     def _save_snapshot(self) -> None:
         self.components.agent.reset_recurrent_state()
@@ -308,6 +306,7 @@ class UniversalPricingTrainer:
         ) / f"step-{self.environment_steps:09d}.pt"
         self.components.agent.save(checkpoint)
         self._save_snapshot()
+        self.logger.log_checkpoint(checkpoint, self.environment_steps)
         return checkpoint
 
     def _run_validation(self, checkpoint: Path) -> None:
@@ -318,14 +317,14 @@ class UniversalPricingTrainer:
             self.protocol.seed_manifest.validation_environment_seeds,
             suite="validation",
         )
-        self.metric_records.append(
-            {
-                "phase": "validation",
-                "environment_steps": self.environment_steps,
-                **summary,
-            }
-        )
+        record = {
+            "phase": "validation",
+            "environment_steps": self.environment_steps,
+            **summary,
+        }
+        self.metric_records.append(record)
         self._write_metrics()
+        self.logger.log_validation(record)
         # Periodic validation is part of the resumable research record. Persist
         # it after evaluation so a resume from this step cannot silently lose it.
         self._save_snapshot()
@@ -335,6 +334,21 @@ class UniversalPricingTrainer:
 
     def train(self) -> ExperimentRunManifest:
         manifest = self._prepare()
+        self.logger.log_run_start(
+            run_id=str(manifest.run_id),
+            architecture=self.coordinate.agent_architecture.value,
+            distributions=(
+                self.coordinate.distribution_combination.identifier
+            ),
+            environment_steps=self.budget.environment_steps,
+            warmup_steps=self.budget.warmup_steps,
+            device=str(self.device),
+            parameter_count=int(
+                manifest.hardware_metadata.get("parameter_count", 0)
+            ),
+            run_directory=self.run_directory,
+            resumed=self.resume,
+        )
         training_started = time.perf_counter()
         previous_handlers: dict[int, Any] = {}
 
@@ -366,18 +380,24 @@ class UniversalPricingTrainer:
                     if self.components.is_recurrent
                     else None
                 )
-                rewards: list[float] = []
-                profits: list[float] = []
-                opponent_profits: list[float] = []
+                episode_metrics = UniversalPricingEpisodeMetrics()
                 update_metrics: list[Mapping[str, float]] = []
                 episode_started = time.perf_counter()
                 while self.environment_steps < self.budget.environment_steps:
                     policy_started = time.perf_counter()
-                    action = (
-                        self._random_action()
-                        if self.environment_steps < self.budget.warmup_steps
-                        else self.components.agent.select_action(observation)
+                    warming_up = (
+                        self.environment_steps < self.budget.warmup_steps
                     )
+                    if warming_up:
+                        action = self._random_action()
+                        policy_diagnostics = None
+                    else:
+                        action = self.components.agent.select_action(
+                            observation
+                        )
+                        policy_diagnostics = (
+                            self.components.agent.policy_diagnostics()
+                        )
                     self.policy_wall_seconds += (
                         time.perf_counter() - policy_started
                     )
@@ -406,9 +426,13 @@ class UniversalPricingTrainer:
                     else:
                         builder.append(transition)
                     self.environment_steps += 1
-                    rewards.append(float(reward))
-                    profits.append(float(info["raw_agent_profit"]))
-                    opponent_profits.append(float(info["raw_opponent_profit"]))
+                    episode_metrics.record_step(
+                        reward=reward,
+                        info=info,
+                        agent_firm=self.environment.market.firms[0],
+                        opponent_firm=self.environment.market.firms[1],
+                        policy_diagnostics=policy_diagnostics,
+                    )
                     if truncated and builder is not None:
                         self.components.replay_buffer.push_episode(
                             builder.build()
@@ -429,20 +453,42 @@ class UniversalPricingTrainer:
                     if terminated or truncated:
                         break
                 self.next_episode_index += 1
+                replay_size = len(self.components.replay_buffer)
+                replay_capacity = int(
+                    getattr(
+                        self.components.replay_buffer,
+                        "capacity_episodes",
+                        getattr(
+                            self.components.replay_buffer,
+                            "capacity",
+                            replay_size,
+                        ),
+                    )
+                )
+                replay_diagnostics = (
+                    self.components.replay_buffer.diagnostics()
+                )
                 record: dict[str, Any] = {
                     "phase": "training",
                     "episode_index": episode_index,
                     "environment_steps": self.environment_steps,
                     "opponent_family": reset_info["opponent_family"],
                     "opponent_policy_name": reset_info["opponent_policy_name"],
-                    "normalized_reward_total": float(np.sum(rewards)),
-                    "raw_agent_profit_total": float(np.sum(profits)),
-                    "raw_opponent_profit_total": float(
-                        np.sum(opponent_profits)
+                    **episode_metrics.summary(),
+                    "replay_size": replay_size,
+                    "replay_capacity": replay_capacity,
+                    "replay_fill_fraction": (
+                        replay_size / replay_capacity
+                        if replay_capacity
+                        else 0.0
                     ),
-                    "profit_advantage_total": float(
-                        np.sum(profits) - np.sum(opponent_profits)
+                    "replay_unit": (
+                        "episodes"
+                        if self.components.is_recurrent
+                        else "transitions"
                     ),
+                    **replay_diagnostics,
+                    "update_count": len(update_metrics),
                     "episode_wall_seconds": time.perf_counter()
                     - episode_started,
                     "cumulative_policy_wall_seconds": (
@@ -462,6 +508,10 @@ class UniversalPricingTrainer:
                         )
                 self.metric_records.append(record)
                 self._write_metrics()
+                self.logger.log_episode(
+                    record,
+                    budget_steps=self.budget.environment_steps,
+                )
                 checkpoint_due = (
                     self.environment_steps
                     % self.budget.checkpoint_interval_steps
@@ -492,6 +542,10 @@ class UniversalPricingTrainer:
                     )
                     self._manifest_repository.write(
                         self.manifest_path, manifest
+                    )
+                    self.logger.log_terminal(
+                        "interrupted",
+                        environment_steps=self.environment_steps,
                     )
                     return manifest
 
@@ -531,6 +585,7 @@ class UniversalPricingTrainer:
                     self.latest_snapshot_path
                 ),
                 "metrics": str(self.metrics_path),
+                "latest_metrics": str(self.logger.latest_metrics_path),
             }
             manifest = replace(
                 manifest,
@@ -538,10 +593,19 @@ class UniversalPricingTrainer:
                 artifact_references=references,
             )
             self._manifest_repository.write(self.manifest_path, manifest)
+            self.logger.log_terminal(
+                "completed",
+                environment_steps=self.environment_steps,
+            )
             return manifest
-        except BaseException:
+        except BaseException as exc:
             failed = replace(manifest, status=RunStatus.FAILED)
             self._manifest_repository.write(self.manifest_path, failed)
+            self.logger.log_terminal(
+                "failed",
+                environment_steps=self.environment_steps,
+                message=f"{type(exc).__name__}: {exc}",
+            )
             raise
         finally:
             for signal_value, handler in previous_handlers.items():

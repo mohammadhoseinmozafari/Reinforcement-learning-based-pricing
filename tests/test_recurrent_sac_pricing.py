@@ -1,6 +1,7 @@
 """Day 4 tests for universal recurrent agents, replay, and shared runtime."""
 
 from dataclasses import replace
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -330,11 +331,40 @@ class UniversalRuntimeTests(unittest.TestCase):
                     coordinate,
                     budget=budget,
                     run_validation=False,
+                    verbose=False,
                 )
                 manifest = trainer.train()
                 self.assertEqual(manifest.status.value, "completed")
                 self.assertEqual(trainer.environment_steps, 100)
                 self.assertTrue(trainer.final_checkpoint_path.is_file())
+                records = [
+                    json.loads(line)
+                    for line in trainer.metrics_path.read_text(
+                        encoding="utf-8"
+                    ).splitlines()
+                ]
+                training_record = next(
+                    record
+                    for record in records
+                    if record["phase"] == "training"
+                )
+                self.assertTrue(
+                    {
+                        "agent_bbp_period_fraction",
+                        "mean_agent_uniform_price",
+                        "mean_agent_bbp_price_spread",
+                        "mean_market_share",
+                        "mean_retention_rate",
+                        "replay_fill_fraction",
+                        "replay_bbp_fraction",
+                        "replay_decision_fraction",
+                        "update_count",
+                    }
+                    <= set(training_record)
+                )
+                self.assertTrue(
+                    trainer.logger.latest_metrics_path.is_file()
+                )
 
     def test_evaluation_pairs_are_family_balanced(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -358,6 +388,12 @@ class UniversalRuntimeTests(unittest.TestCase):
                 suite="validation",
             )
             self.assertEqual(summary["episode_count"], 4)
+            self.assertIn("mean_bbp_period_fraction", summary)
+            self.assertIn("mean_market_share", summary)
+            self.assertEqual(
+                set(summary["by_opponent_family"]),
+                {"uniform", "bbp"},
+            )
             for seed_index in (0, 1):
                 families = {
                     item["opponent_family"]
@@ -390,6 +426,7 @@ class UniversalRuntimeTests(unittest.TestCase):
                 coordinate,
                 budget=budget,
                 run_validation=False,
+                verbose=False,
             )
             uninterrupted.train()
 
@@ -398,6 +435,7 @@ class UniversalRuntimeTests(unittest.TestCase):
                 coordinate,
                 budget=budget,
                 run_validation=False,
+                verbose=False,
             )
             interrupted.request_stop()
             self.assertEqual(
@@ -410,6 +448,7 @@ class UniversalRuntimeTests(unittest.TestCase):
                 budget=budget,
                 run_validation=False,
                 resume=True,
+                verbose=False,
             )
             resumed.train()
 
