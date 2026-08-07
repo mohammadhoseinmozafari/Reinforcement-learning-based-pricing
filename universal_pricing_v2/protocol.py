@@ -40,6 +40,7 @@ ACTION_CONTRACT_VERSION = "pricing_action_v1"
 OBSERVATION_CONTRACT_VERSION = "hierarchical_pricing_observation_v2"
 PRIMARY_CURRICULUM_ID = "hierarchical_full_curriculum"
 REWARD_SPECIFICATION = "normalized_net_profit"
+MARKET_TIMING = "simultaneous"
 DEFAULT_PROTOCOL_ROOT_SEED = 20260805
 
 
@@ -623,6 +624,7 @@ class UniversalPricingV2ProtocolConfig:
     observation_contract_version: str
     curriculum_id: str
     reward_specification: str
+    market_timing: str
     artifact_root: Path
     regime_commitment_length: int
     bbp_operating_cost_rate: float
@@ -657,6 +659,7 @@ class UniversalPricingV2ProtocolConfig:
                 REWARD_SPECIFICATION,
                 "reward_specification",
             ),
+            (self.market_timing, MARKET_TIMING, "market_timing"),
         )
         for actual, wanted, name in expected:
             if actual != wanted:
@@ -756,6 +759,7 @@ class UniversalPricingV2ProtocolConfig:
             "observation_contract_version": self.observation_contract_version,
             "curriculum_id": self.curriculum_id,
             "reward_specification": self.reward_specification,
+            "market_timing": self.market_timing,
             "artifact_root": str(self.artifact_root),
             "regime_commitment_length": self.regime_commitment_length,
             "bbp_operating_cost_rate": self.bbp_operating_cost_rate,
@@ -1132,6 +1136,7 @@ def load_universal_pricing_v2_protocol(
         "observation_contract_version",
         "curriculum_id",
         "reward_specification",
+        "market_timing",
         "artifact_root",
         "regime_commitment_length",
         "bbp_operating_cost_rate",
@@ -1203,6 +1208,7 @@ def load_universal_pricing_v2_protocol(
         observation_contract_version=str(raw["observation_contract_version"]),
         curriculum_id=str(raw["curriculum_id"]),
         reward_specification=str(raw["reward_specification"]),
+        market_timing=str(raw["market_timing"]),
         artifact_root=artifact_root,
         regime_commitment_length=raw["regime_commitment_length"],
         bbp_operating_cost_rate=raw["bbp_operating_cost_rate"],

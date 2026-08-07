@@ -495,6 +495,7 @@ class UniversalPricingV2Evaluator:
                         "evaluation_seed": int(environment_seed),
                         "opponent_policy_name": opponent_name,
                         "opponent_family": reset_info["opponent_family"],
+                        "market_timing": reset_info["market_timing"],
                         "location_distribution": combination.location.value,
                         "strategicness_distribution": (
                             combination.strategicness.value

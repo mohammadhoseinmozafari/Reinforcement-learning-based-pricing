@@ -53,6 +53,7 @@ from universal_pricing_v2.protocol import (
     AgentRegimeMode,
     HierarchicalSeedDeriver,
     HierarchicalTrainingPhase,
+    MARKET_TIMING,
     StageEpisodeSeedBundle,
     UniversalPricingV2ProtocolConfig,
     V2ExperimentCoordinate,
@@ -442,6 +443,7 @@ class HierarchicalPricingEnvironmentV2(gym.Env):
             "opponent_family": assignment.opponent_family.value,
             "opponent_policy_name": assignment.policy_name,
             "seed_source": seed_source,
+            "market_timing": MARKET_TIMING,
         }
 
     def _forced_regime(self) -> PricingRegime | None:
@@ -471,32 +473,18 @@ class HierarchicalPricingEnvironmentV2(gym.Env):
             regime_changed=previous is not forced,
         )
 
-    def _agent_submission(
+    def _agent_market_prices(
         self,
         prices: PriceVector,
         regime: PricingRegime,
-    ) -> tuple[dict[str, float], PriceVector]:
-        agent = self.market.firms[0]
+    ) -> dict[str, float]:
         if regime is PricingRegime.UNIFORM:
-            return (
-                {"uniform_price": prices.uniform},
-                PriceVector(
-                    uniform=prices.uniform,
-                    new=agent.price_new,
-                    old=agent.price_old,
-                ),
-            )
-        return (
-            {"price_new": prices.new, "price_old": prices.old},
-            PriceVector(
-                uniform=agent.uniform_price,
-                new=prices.new,
-                old=prices.old,
-            ),
-        )
+            return {"uniform_price": prices.uniform}
+        return {"price_new": prices.new, "price_old": prices.old}
 
     def _opponent_observation(
-        self, agent_submission: PriceVector
+        self,
+        previous_agent_regime: PricingRegime,
     ) -> OpponentObservation:
         opponent, agent = self.market.firms[1], self.market.firms[0]
         opponent_share = 0.5 if self._timestep == 0 else opponent.market_share
@@ -520,10 +508,12 @@ class HierarchicalPricingEnvironmentV2(gym.Env):
                 ),
                 own_new_customer_ratio=opponent.get_new_old_ratio(),
             ),
-            competitor_submission=agent_submission,
+            # V2 is a simultaneous-move game. Both firms decide period-t
+            # prices from the completed period-(t-1) information set.
+            competitor_submission=None,
             competitor_established_share=self.market.get_established_share(0),
             own_regime=opponent.pricing_regime,
-            competitor_regime=agent.pricing_regime,
+            competitor_regime=previous_agent_regime,
             decision_period=self._timestep,
             state_period=self._timestep - 1,
             episode_length=self.episode_length,
@@ -540,16 +530,22 @@ class HierarchicalPricingEnvironmentV2(gym.Env):
         )
         if boundary_before_action and self._timestep > 0:
             self.strategy_window.reset()
+        previous_agent_regime = PricingRegime(
+            self.market.firms[0].pricing_regime
+        )
         decision = self._resolve_regime(structured.regime)
         transformed = self.price_transform.controls_to_prices(structured)
-        agent_market_prices, agent_submission = self._agent_submission(
+        agent_market_prices = self._agent_market_prices(
             transformed, decision.effective_regime
         )
         self.market.set_regimes(
             decision.effective_regime, self.opponent_policy.regime
         )
+        opponent_observation = self._opponent_observation(
+            previous_agent_regime
+        )
         opponent_prices = self.opponent_policy.get_prices(
-            self._opponent_observation(agent_submission)
+            opponent_observation
         )
         opponent_vector = PriceVector(
             uniform=float(opponent_prices["uniform_price"]),
@@ -650,6 +646,20 @@ class HierarchicalPricingEnvironmentV2(gym.Env):
             "stage_key": context.stage_key,
             "local_episode_index": context.local_episode_index,
             "agent_regime_mode": context.agent_regime_mode.value,
+            "market_timing": MARKET_TIMING,
+            "opponent_observed_current_agent_submission": False,
+            "opponent_observed_agent_regime": int(
+                opponent_observation.competitor_regime
+            ),
+            "opponent_observed_agent_uniform_price": float(
+                opponent_observation.previous.competitor_prices.uniform
+            ),
+            "opponent_observed_agent_bbp_new_price": float(
+                opponent_observation.previous.competitor_prices.new
+            ),
+            "opponent_observed_agent_bbp_old_price": float(
+                opponent_observation.previous.competitor_prices.old
+            ),
             "consumer_seed": context.episode_seed_bundle.consumer_seed,
             "opponent_seed": context.episode_seed_bundle.opponent_seed,
             "agent_uniform_price": float(agent.uniform_price),

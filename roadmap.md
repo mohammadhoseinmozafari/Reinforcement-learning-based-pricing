@@ -21,6 +21,12 @@ Every independent training seed starts this entire sequence from fresh network
 initialization. The ten seeds are replications, not sequential training of one
 model.
 
+V2 uses simultaneous market decisions. For period `t`, both firms choose from
+the completed period-`t-1` state; neither firm observes the other's period-`t`
+price or newly selected regime before submitting its own action. The market
+then clears both submissions together. Stackelberg timing remains legacy-only
+and is not part of the primary v2 protocol.
+
 ### Ordered implementation and research tasks
 
 1. Define the isolated v2 protocol, validated configuration, seed namespaces,
@@ -157,6 +163,8 @@ and target-Q calculations use a Polyak target encoder.
   `3e-5`, exactly 0.1× the normal price learning rate.
 - Policies never observe consumer-distribution identities or opponent policy
   names.
+- Opponents never observe the agent's current-period submission; reactive
+  policies respond to previously posted prices and regimes.
 - Primary study: 27 distribution-specific policies per architecture with ten
   independent training seeds, for 810 runs.
 - The 27×27 transfer evaluation measures out-of-distribution generalization.

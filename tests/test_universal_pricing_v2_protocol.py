@@ -67,6 +67,7 @@ class UniversalPricingV2ProtocolTests(unittest.TestCase):
             self.assertEqual(V2ExperimentRunId.parse(run_id), coordinate)
 
     def test_protocol_freezes_budgets_order_and_architectures(self) -> None:
+        self.assertEqual(self.protocol.market_timing, "simultaneous")
         self.assertEqual(
             set(self.protocol.agent_profiles), set(AgentArchitecture)
         )

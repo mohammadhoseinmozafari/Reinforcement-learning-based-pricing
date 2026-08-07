@@ -208,6 +208,15 @@ class HierarchicalPricingTrainer:
             manifest = self.manifest_repository.read(self.manifest_path)
             if manifest.coordinate != self.coordinate:
                 raise ValueError("Resume coordinate mismatch")
+            resolved_protocol = self.protocol.to_dict()
+            if (
+                dict(manifest.resolved_protocol) != resolved_protocol
+                or manifest.configuration_hash
+                != stable_configuration_hash(resolved_protocol)
+            ):
+                raise ValueError(
+                    "Resume protocol does not match the run manifest"
+                )
             if manifest.status is RunStatus.COMPLETED:
                 raise ValueError("Completed v2 runs cannot be resumed")
             if not self.snapshot_path.is_file():
@@ -521,6 +530,7 @@ class HierarchicalPricingTrainer:
             "stage_key": stage_key,
             "opponent_family": reset_info["opponent_family"],
             "opponent_policy_name": reset_info["opponent_policy_name"],
+            "market_timing": reset_info["market_timing"],
             "consumer_seed": reset_info["consumer_seed"],
             "opponent_seed": reset_info["opponent_seed"],
             "episode_wall_seconds": (

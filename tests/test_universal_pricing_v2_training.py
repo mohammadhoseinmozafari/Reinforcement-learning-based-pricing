@@ -245,6 +245,25 @@ class UniversalPricingV2TrainingTests(unittest.TestCase):
                 episode_length=1,
             ).train()
             self.assertEqual(interrupted.status, RunStatus.INTERRUPTED)
+            incompatible = replace(
+                protocol,
+                mastery_gate=replace(
+                    protocol.mastery_gate,
+                    score_threshold=0.80,
+                ),
+            )
+            with self.assertRaisesRegex(
+                ValueError, "protocol does not match"
+            ):
+                HierarchicalPricingTrainer(
+                    incompatible,
+                    coordinate,
+                    device="cpu",
+                    verbose=False,
+                    enable_mastery_evaluation=False,
+                    resume=True,
+                    episode_length=1,
+                ).train()
             resumed = HierarchicalPricingTrainer(
                 protocol,
                 coordinate,

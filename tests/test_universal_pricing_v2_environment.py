@@ -157,6 +157,151 @@ class UniversalPricingV2EnvironmentTests(unittest.TestCase):
             )
             self.assertEqual(info["agent_regime"], expected)
 
+    def test_reactive_opponent_uses_previous_not_current_agent_price(
+        self,
+    ) -> None:
+        low_environment = self.make_environment(episode_length=2)
+        high_environment = self.make_environment(episode_length=2)
+        low_environment.reset(
+            options={
+                "episode_context": self.context(
+                    low_environment,
+                    AgentRegimeMode.FORCED_UNIFORM,
+                    opponent="uniform_myopic",
+                )
+            }
+        )
+        high_environment.reset(
+            options={
+                "episode_context": self.context(
+                    high_environment,
+                    AgentRegimeMode.FORCED_UNIFORM,
+                    opponent="uniform_myopic",
+                )
+            }
+        )
+        transform = PricingPriceTransform()
+        low_control = float(
+            transform.prices_to_controls(
+                PriceVector(uniform=0.5, new=2.25, old=3.0)
+            )[0]
+        )
+        high_control = float(
+            transform.prices_to_controls(
+                PriceVector(uniform=5.0, new=2.25, old=3.0)
+            )[0]
+        )
+        _, _, _, _, low_first = low_environment.step(
+            action(PricingRegime.UNIFORM, (low_control, 0.0, 0.0))
+        )
+        _, _, _, _, high_first = high_environment.step(
+            action(PricingRegime.UNIFORM, (high_control, 0.0, 0.0))
+        )
+        self.assertEqual(low_first["market_timing"], "simultaneous")
+        self.assertFalse(
+            low_first["opponent_observed_current_agent_submission"]
+        )
+        self.assertEqual(
+            low_first["opponent_observed_agent_uniform_price"], 2.75
+        )
+        self.assertEqual(
+            high_first["opponent_observed_agent_uniform_price"], 2.75
+        )
+        self.assertAlmostEqual(
+            low_first["opponent_uniform_price"],
+            high_first["opponent_uniform_price"],
+        )
+        self.assertAlmostEqual(low_first["opponent_uniform_price"], 2.125)
+
+        neutral_control = float(
+            transform.prices_to_controls(
+                PriceVector(uniform=2.75, new=2.25, old=3.0)
+            )[0]
+        )
+        _, _, _, _, low_second = low_environment.step(
+            action(PricingRegime.UNIFORM, (neutral_control, 0.0, 0.0))
+        )
+        _, _, _, _, high_second = high_environment.step(
+            action(PricingRegime.UNIFORM, (neutral_control, 0.0, 0.0))
+        )
+        self.assertEqual(
+            low_second["opponent_observed_agent_uniform_price"], 0.5
+        )
+        self.assertEqual(
+            high_second["opponent_observed_agent_uniform_price"], 5.0
+        )
+        self.assertNotEqual(
+            low_second["opponent_uniform_price"],
+            high_second["opponent_uniform_price"],
+        )
+
+    def test_new_regime_is_hidden_until_after_simultaneous_decision(
+        self,
+    ) -> None:
+        environment = self.make_environment(episode_length=11)
+        environment.reset(
+            options={
+                "episode_context": self.context(
+                    environment,
+                    AgentRegimeMode.LEARNED,
+                    opponent="uniform_myopic",
+                )
+            }
+        )
+        _, _, _, _, first = environment.step(
+            action(PricingRegime.BBP, (1.0, 1.0, 1.0))
+        )
+        self.assertEqual(first["agent_regime"], PricingRegime.BBP)
+        self.assertEqual(
+            first["opponent_observed_agent_regime"],
+            PricingRegime.UNIFORM,
+        )
+        for _ in range(9):
+            environment.step(action(PricingRegime.BBP))
+        _, _, _, _, boundary = environment.step(
+            action(PricingRegime.UNIFORM)
+        )
+        self.assertEqual(boundary["agent_regime"], PricingRegime.UNIFORM)
+        self.assertEqual(
+            boundary["opponent_observed_agent_regime"],
+            PricingRegime.BBP,
+        )
+
+    def test_all_nine_opponents_accept_lagged_v2_information(self) -> None:
+        policies = (
+            self.protocol.opponent_pool.uniform_policies
+            + self.protocol.opponent_pool.bbp_policies
+        )
+        self.assertEqual(len(policies), 9)
+        for policy_name in policies:
+            with self.subTest(policy=policy_name):
+                environment = self.make_environment(
+                    episode_length=2, num_consumers=20
+                )
+                environment.reset(
+                    options={
+                        "episode_context": self.context(
+                            environment,
+                            AgentRegimeMode.LEARNED,
+                            opponent=policy_name,
+                        )
+                    }
+                )
+                for regime in (PricingRegime.BBP, PricingRegime.UNIFORM):
+                    observation, reward, _, _, info = environment.step(
+                        action(regime, (0.2, -0.1, 0.4))
+                    )
+                    self.assertTrue(
+                        environment.observation_space.contains(observation)
+                    )
+                    self.assertTrue(np.isfinite(reward))
+                    self.assertFalse(
+                        info[
+                            "opponent_observed_current_agent_submission"
+                        ]
+                    )
+                environment.close()
+
     def test_equal_prices_have_equal_gross_profit_and_exact_cost_gap(self) -> None:
         transform = PricingPriceTransform()
         controls = transform.prices_to_controls(

@@ -3,6 +3,7 @@ action_contract_version: pricing_action_v1
 observation_contract_version: hierarchical_pricing_observation_v2
 curriculum_id: hierarchical_full_curriculum
 reward_specification: normalized_net_profit
+market_timing: simultaneous
 artifact_root: experiments/upv2
 regime_commitment_length: 10
 bbp_operating_cost_rate: 0.01
