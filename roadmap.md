@@ -1,4 +1,191 @@
-# One-Week Research Roadmap
+# Universal Pricing Research Roadmap
+
+## Current Protocol: Universal Pricing v2
+
+`universal_pricing_v2` is the authoritative implementation path. It is an
+additive research protocol: legacy code and `universal_pricing_v1` remain
+unchanged and runnable. V2 owns its package, YAML files, entrypoints,
+manifests, checkpoints, tests, and short artifact paths.
+
+The central hypothesis is tested with three independently optimized
+controllers:
+
+```text
+Forced uniform-price learning
+→ Forced BBP-price learning
+→ Regime-strategy learning with both price controllers frozen
+→ Low-learning-rate joint consolidation
+```
+
+Every independent training seed starts this entire sequence from fresh network
+initialization. The ten seeds are replications, not sequential training of one
+model.
+
+### Ordered implementation and research tasks
+
+1. Define the isolated v2 protocol, validated configuration, seed namespaces,
+   810-coordinate matrix, short artifact layout, and validation-only CLI.
+2. Add symmetric BBP operating-cost accounting and freeze gross/net/reward
+   contracts.
+3. Add the 19-feature macro-strategy observation and ten-period evidence
+   window.
+4. Build the v2 environment with forced-uniform, forced-BBP, and learned-regime
+   modes.
+5. Preserve the nine opponents in their easiest-to-hardest order for each
+   forced pricing phase; add mastery baselines, gates, and balanced strategy
+   scheduling.
+6. Build independent uniform, BBP, and macro-strategy replay repositories,
+   including recurrent episode replay, burn-in, stage labels, and active masks.
+7. Implement hierarchical SAC with independent controller optimizers and
+   temperatures.
+8. Implement hierarchical RSAC with separate recurrent state for both pricing
+   skills and macro strategy.
+9. Implement opponent-embedding RSAC with a shared period encoder, auxiliary
+   next-opponent-control prediction, and a target encoder.
+10. Implement deterministic phase freezing, 0.1× joint price tuning, curriculum
+    advancement, atomic checkpointing, and exact resume.
+11. Adapt v2 metrics to the existing terminal and JSONL logger without changing
+    the logger itself.
+12. Implement learned, forced-uniform, forced-BBP, random-regime, oracle,
+    validation, final, and 27×27 transfer evaluation.
+13. Prove contracts with deterministic unit, economic, gradient-isolation,
+    checkpoint, and trainer-resume tests while retaining all legacy/v1 tests.
+14. Run nine 300,000-step pilots: three architectures × three anchor
+    populations × seed index 0.
+15. Freeze hyperparameters only after all pilot numerical, economic, mastery,
+    resume, and reproducibility gates pass.
+16. Register 810 production runs and launch them in seed waves 0–4 and 5–9.
+17. Evaluate completed runs with the 25 validation and 100 locked final seeds.
+18. Generate paired architecture comparisons, transfer matrices, BBP-cost
+    analysis, and machine-readable reproducibility tables.
+
+Tasks 1–13 are implementation gates. Tasks 14–18 require the declared compute
+campaign and cannot be marked complete merely because their launch and analysis
+software exists.
+
+### Components retained from v1
+
+| Retained component | V2 responsibility |
+|---|---|
+| `PricingRegime`, `PricingAction`, `PricingActionCodec` | Keep the public Gym action and five-value effective replay action. |
+| `PricingPriceTransform` | Keep uniform and feasible BBP price mappings. |
+| 18-feature pricing observation | Keep the period-level pricing input unchanged. |
+| Consumer specifications, samplers, and generator | Keep all 27 independently seeded population combinations. |
+| `HotellingMarket` population installation | Reuse pure market clearing without changing legacy accounting. |
+| Nine opponent implementations | Reuse opponent decisions without policy-name leakage. |
+| `RegimeCommitmentController` | Keep ten-period learned regime decisions. |
+| Balanced opponent schedule | Use for strategy training and paired evaluation. |
+| Root seed and 10/25/100 banks | Keep paired training, validation, and locked final streams. |
+| `sac`, `rsac`, `oe_rsac` identifiers | Keep stable comparison identities. |
+| Existing logger conventions | Compose through a v2 metrics adapter. |
+| Deterministic manifests and evaluation concepts | Reimplement with the v2 schema and artifact namespace. |
+
+### Components replaced in v2
+
+| V1 component | V2 replacement |
+|---|---|
+| One hybrid actor and hybrid critics | Three independently optimized actor/critic groups. |
+| One replay system | Uniform-price, BBP-price, and macro-strategy replay. |
+| Flat observation | `{"pricing": (18,), "strategy": (19,)}`. |
+| Gross-profit reward accounting | Symmetric 1% capacity-rate BBP cost and normalized net-profit reward. |
+| Mixed learning from the first step | Forced price-skill phases followed by strategy learning. |
+| Balanced opponent pool throughout | Two ordered nine-stage curricula, then balanced strategy episodes. |
+| V1 trainer and snapshot writer | Phase-aware v2 trainer and short-name atomic snapshots. |
+| V1 evaluator | Paired counterfactual and distribution-transfer evaluator. |
+| Long descriptive artifact directories | `experiments/upv2/{agent}/{distribution-code}/s{seed}/`. |
+
+### Controller architectures
+
+All controllers own independent actors, twin critics, target critics, entropy
+temperatures, optimizers, and replay. Only an active price controller receives
+price-loss gradients. The strategy controller receives gradients only in the
+strategy phases.
+
+#### SAC
+
+| Controller | Actor | Twin critics |
+|---|---|---|
+| Uniform price | `18 → 256 → 256 →` one tanh-Gaussian control | `(18 + 1) → 256 → 256 → Q` |
+| BBP price | `18 → 256 → 256 →` new and premium tanh-Gaussian controls | `(18 + 2) → 256 → 256 → Q` |
+| Regime strategy | `19 → 128 → 128 →` two categorical logits | `19 → 128 → 128 →` two regime Q-values |
+
+The strategy policy exactly marginalizes both regimes.
+
+#### Plain RSAC
+
+| Controller | Recurrent input | Output |
+|---|---|---|
+| Uniform price | 18 pricing features + previous uniform control + previous reward + active mask = 21 | `GRU(128)` then one tanh-Gaussian control |
+| BBP price | 18 pricing features + previous two BBP controls + previous reward + active mask = 22 | `GRU(128)` then two tanh-Gaussian controls |
+| Regime strategy | 19 strategy features + previous regime one-hot + previous macro reward = 22 | `GRU(128)` then two categorical logits |
+
+Each price critic has its own `GRU(128)` plus current action and a scalar-Q
+head. Each strategy critic has its own `GRU(128)` and two Q outputs. Both price
+states advance every period, even while inactive. Price replay uses 16 burn-in
++ 16 learning steps; strategy replay uses 2 burn-in + 8 macro learning steps.
+
+#### Opponent-embedding RSAC
+
+OE-RSAC keeps all RSAC controllers and adds:
+
+```text
+18 pricing features
++ previous effective action (5)
++ previous opponent controls (3)
++ previous normalized net reward (1)
+= 27 inputs
+
+27 → GRU(128) → 32-value opponent embedding
+```
+
+Both pricing controllers consume the live embedding; the strategy controller
+consumes its regime-boundary snapshot. An `embedding + current action` MLP
+predicts the opponent's next three controls with Huber loss. Critics and the
+auxiliary objective train the encoder, actors consume a detached embedding,
+and target-Q calculations use a Polyak target encoder.
+
+### Frozen budgets, economics, and research defaults
+
+- Production budget: 180k forced-uniform + 220k forced-BBP + 200k
+  strategy/joint = 600k environment steps.
+- Pilot budget: the predeclared nine anchor runs use 90k + 110k + 100k = 300k.
+- BBP cost per BBP period for either firm:
+  `0.01 × num_consumers × 5.0`.
+- Primary reward: agent net profit divided by `num_consumers × 5.0`.
+- Strategy is frozen out of both forced-price phases.
+- Pricing is frozen for the first 50k–100k strategy steps, then fine-tuned at
+  `3e-5`, exactly 0.1× the normal price learning rate.
+- Policies never observe consumer-distribution identities or opponent policy
+  names.
+- Primary study: 27 distribution-specific policies per architecture with ten
+  independent training seeds, for 810 runs.
+- The 27×27 transfer evaluation measures out-of-distribution generalization.
+- Final seeds cannot affect curricula, tuning, checkpoint selection, or
+  stopping.
+
+### Operational commands
+
+```bash
+python pricing_train_v2.py --enumerate
+python pricing_train_v2.py --agent rsac \
+  --location-distribution uniform \
+  --strategicness-distribution truncated_normal \
+  --exclusivity-distribution truncated_skew_normal \
+  --seed-index 0 --device cuda
+python pricing_pilot_v2.py --enumerate
+python pricing_pilot_v2.py --agent rsac --anchor-index 0 --device cuda
+python pricing_sweep_v2.py --wave 1 --commands
+python pricing_evaluate_v2.py --run-directory <run> --evaluation-suite final \
+  --device cuda
+python pricing_analyze_v2.py
+```
+
+---
+
+## Completed Universal Pricing v1 Baseline (Historical)
+
+The remainder of this document records the earlier one-week v1 design. It is
+kept for provenance and is not the current implementation authority.
 
 ## Objective
 

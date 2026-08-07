@@ -1,0 +1,18 @@
+# Nine predeclared v2 learning pilots.
+base_protocol: ../protocols/universal_pricing_v2.yaml
+artifact_root: experiments/upv2_pilots
+budget_scale: 0.5
+training_seed_index: 0
+anchors:
+  - name: all_uniform
+    location: uniform
+    strategicness: uniform
+    exclusivity: uniform
+  - name: all_truncated_normal
+    location: truncated_normal
+    strategicness: truncated_normal
+    exclusivity: truncated_normal
+  - name: all_truncated_skew_normal
+    location: truncated_skew_normal
+    strategicness: truncated_skew_normal
+    exclusivity: truncated_skew_normal
