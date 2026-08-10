@@ -227,7 +227,7 @@ class FeedForwardContinuousSACController:
 
         entropy = -log_probability.detach()
         temperature_loss = _masked_mean(
-            self.log_temperature * (entropy - (-self.target_entropy)),
+            self.log_temperature * (entropy - self.target_entropy),
             masks,
         )
         self.temperature_optimizer.zero_grad(set_to_none=True)
@@ -684,7 +684,7 @@ class RecurrentContinuousSACController:
 
         entropy = -log_probability.detach()
         temperature_loss = _masked_mean(
-            self.log_temperature * (entropy - (-self.target_entropy)),
+            self.log_temperature * (entropy - self.target_entropy),
             masks,
         )
         self.temperature_optimizer.zero_grad(set_to_none=True)

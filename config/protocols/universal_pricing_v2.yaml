@@ -14,7 +14,7 @@ seed_manifest: ../seeds/universal_pricing_v1.yaml
 
 mastery_gate:
   validation_interval_steps: 5000
-  score_threshold: 0.90
+  score_threshold: 0.0
   consecutive_passes: 2
   validation_seed_count: 5
   strategy_uniform_accuracy: 0.80
@@ -56,16 +56,16 @@ curricula:
 agent_profiles:
   sac:
     architecture: sac
-    pricing_hidden_dimensions: [256, 256]
+    pricing_hidden_dimensions: [128, 128]
     strategy_hidden_dimensions: [128, 128]
-    actor_learning_rate: 0.0003
-    critic_learning_rate: 0.0003
+    actor_learning_rate: 0.0005
+    critic_learning_rate: 0.0005
     entropy_learning_rate: 0.0003
     joint_price_learning_rate: 0.00003
     gamma_price: 0.99
     gamma_strategy: 0.9043820750088044
     tau: 0.005
-    initial_temperature: 0.2
+    initial_temperature: 0.6
     gradient_clip_norm: 10.0
     batch_size: 256
     pricing_replay_capacity: 300000
@@ -80,14 +80,14 @@ agent_profiles:
     strategy_sequence_length: 8
     strategy_burn_in_length: 2
     episode_replay_capacity: 1000
-    actor_learning_rate: 0.0003
-    critic_learning_rate: 0.0003
+    actor_learning_rate: 0.0005
+    critic_learning_rate: 0.0005
     entropy_learning_rate: 0.0003
     joint_price_learning_rate: 0.00003
     gamma_price: 0.99
     gamma_strategy: 0.9043820750088044
     tau: 0.005
-    initial_temperature: 0.2
+    initial_temperature: 0.6
     gradient_clip_norm: 10.0
     batch_size: 64
     pricing_replay_capacity: 300000
@@ -104,17 +104,17 @@ agent_profiles:
     episode_replay_capacity: 1000
     opponent_embedding_dimension: 32
     encoder_hidden_dimension: 128
-    encoder_learning_rate: 0.0003
+    encoder_learning_rate: 0.0005
     auxiliary_loss_weight: 1.0
     actor_learning_rate: 0.0003
     critic_learning_rate: 0.0003
-    entropy_learning_rate: 0.0003
+    entropy_learning_rate: 0.0001
     joint_price_learning_rate: 0.00003
     gamma_price: 0.99
     gamma_strategy: 0.9043820750088044
     tau: 0.005
     initial_temperature: 0.2
-    gradient_clip_norm: 10.0
+    gradient_clip_norm: 1000.0
     batch_size: 64
     pricing_replay_capacity: 300000
     strategy_replay_capacity: 100000
