@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
 
@@ -669,6 +669,8 @@ class RecurrentPricingEpisodeReplay:
         batch_size: int,
         *,
         current_stage_key: str | None = None,
+        target_current_fraction : float = 0.7,
+        min_current_pool : Optional[int] = None
     ) -> PricingSequenceBatch:
         if batch_size <= 0 or not self._episodes:
             raise ValueError("Cannot sample recurrent pricing replay")
@@ -687,12 +689,19 @@ class RecurrentPricingEpisodeReplay:
                 0, len(self._episodes), size=batch_size
             )
         else:
-            current_count = (batch_size + 1) // 2
+            if min_current_pool is None:
+                min_current_pool = max(1, round(batch_size * target_current_fraction))
+            pool_ratio = min(1.0, len(current) / min_current_pool)
+            effective_fraction = target_current_fraction * pool_ratio
+
+            current_count = round(batch_size * effective_fraction)
             previous_count = batch_size - current_count
             selected = np.concatenate(
                 [
                     self._rng.choice(
-                        current, size=current_count, replace=True
+                        current,
+                        size=current_count,
+                        replace=len(current) < current_count,
                     ),
                     self._rng.choice(
                         previous if previous else current,
