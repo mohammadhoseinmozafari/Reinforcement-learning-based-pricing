@@ -16,7 +16,7 @@ from env.pricing_contracts import (
     PricingActionCodec,
     PricingRegime,
 )
-from env.universal_pricing_env import PricingPriceTransform
+from env.pricing_env import PricingPriceTransform
 from universal_pricing_v2.economics import BBPProfitAccounting
 from universal_pricing_v2.evaluation import (
     StrategyMasteryScenarioFactory,

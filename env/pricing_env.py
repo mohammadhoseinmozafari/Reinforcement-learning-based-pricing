@@ -1,519 +1,821 @@
-"""
-Uniform Price Learning Environment
+"""Universal Gym environment for agent-controlled pricing regimes."""
 
-Simplified single-agent environment for learning optimal uniform pricing.
-- Agent action: scalar price p_uniform (continuous)  
-- Regime switching is disabled (always uniform pricing)
-- Opponent can choose BBP of Uniform pricing strategies
+from __future__ import annotations
 
-"""
+from dataclasses import dataclass
+from typing import Any, Mapping
 
-from typing import Dict, Tuple, Optional, Union
-import numpy as np
-
-from .type import EnvironmentType
 import gymnasium as gym
 from gymnasium import spaces
+import numpy as np
 
-
-from env.models import HotellingMarket
-from env.opponent_policies import (
-    OpponentPolicy,
-    OpponentObservation,
-    PreviousMarketState,
-    PriceVector,
-    
-    create_preset_opponent,
-)
 from config.constants import (
-    NUM_CONSUMERS,
     EPISODE_LENGTH,
+    MARGINAL_COST,
+    NUM_CONSUMERS,
     PRICE_BBP_NEW_MAX,
     PRICE_BBP_NEW_MIN,
     PRICE_BBP_OLD_MAX,
     PRICE_BBP_OLD_MIN,
-    PRICE_UNIFORM_MIN,
     PRICE_UNIFORM_MAX,
-    RANDOM_SEED,
+    PRICE_UNIFORM_MIN,
+)
+from env.consumer_population import ConsumerPopulationGenerator
+from env.models import HotellingMarket
+from env.opponent_policies import (
+    OpponentObservation,
+    OpponentPolicy,
+    PreviousMarketState,
+    PriceVector,
+    create_preset_opponent,
+)
+from env.pricing_contracts import (
+    PricingAction,
+    PricingActionCodec,
+    PricingObservationCodec,
+    PricingRegime,
+)
+from train.universal_pricing_protocol import (
+    BalancedOpponentSchedule,
+    ConsumerPopulationSpec,
+    EpisodeSeedBundle,
+    OpponentEpisodeAssignment,
+    OpponentFamily,
+    OpponentPoolConfig,
+    ProtocolConfigError,
+    RunSeedBundle,
+    SeedDeriver,
 )
 
 
-class PricingEnv(gym.Env):
-    """
-    Single-agent environment for pricing only.
-    
-    Simplifications from full hierarchical environment:
-    - Observation is a flat vector of market features
-    - No strategy controller.
-    
-    This focused environment is ideal for 'Pricing experiments'
-    where we want to learn optimal pricing strategy against
-    an opponent.
+@dataclass(frozen=True)
+class UniversalPricingEpisodeContext:
+    """Resolved seeds and scheduled opponent for one episode."""
 
-    """
-    
-    metadata = {
-        "render_modes": [],
-        "name": "pricing_v1"
-    }
-    
+    episode_index: int
+    episode_seed_bundle: EpisodeSeedBundle
+    opponent_assignment: OpponentEpisodeAssignment
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.episode_index, int)
+            or isinstance(self.episode_index, bool)
+            or self.episode_index < 0
+        ):
+            raise ProtocolConfigError(
+                "episode_index must be a nonnegative integer"
+            )
+        if self.opponent_assignment.episode_index != self.episode_index:
+            raise ProtocolConfigError(
+                "Opponent assignment episode index does not match context"
+            )
+        if (
+            self.opponent_assignment.opponent_seed
+            != self.episode_seed_bundle.opponent_seed
+        ):
+            raise ProtocolConfigError(
+                "Opponent assignment and episode seed bundle disagree"
+            )
+
+
+class UniversalPricingEpisodeContextFactory:
+    """Resolve deterministic seeds and opponents for explicit episode indices."""
+
     def __init__(
         self,
-        environment_type : EnvironmentType,
-        opponent_policy: OpponentPolicy,
-        num_consumers: int = NUM_CONSUMERS,
-        episode_length: int = EPISODE_LENGTH,
-        seed: Optional[int] = RANDOM_SEED,
-    ):
-        """
-        Initialize pricing environment.
-        
-        Args:
-            environment_type : type of the env (uniform pricing or bbp) 
-            opponent_policy: Policy for opponent (uses ConstantOpponentPolicy if None)
-            num_consumers: Number of consumers in market
-            episode_length: Total steps per episode
-            seed: Random seed for reproducibility
-        """
-        super().__init__()
-        
-        self.num_consumers = num_consumers
-        self.episode_length = episode_length
-        self.seed_value = seed
-        self.environment_type = environment_type
-        
-        self.market = HotellingMarket(num_consumers=num_consumers, seed=seed)
-        
-
-
-        self.opponent_policy = opponent_policy
-       
-        # =====================================
-        # ACTION SPACE: Flattened price (uniform_price , price_new , price_old)
-        # =====================================
-        # Action is normalized to [-1, 1], scaled to price range internally
-        action_dim = 3
-        self.action_space = spaces.Box(
-            low=-1.0,
-            high=1.0,
-            shape=(action_dim,),
-            dtype=np.float32
+        run_seed_bundle: RunSeedBundle,
+        opponent_pool: OpponentPoolConfig,
+    ) -> None:
+        self.run_seed_bundle = run_seed_bundle
+        self.opponent_pool = opponent_pool
+        self.opponent_schedule = BalancedOpponentSchedule(
+            opponent_pool,
+            run_seed_bundle.opponent_schedule_seed,
         )
 
-        
-        # =====================================
-        # OBSERVATION SPACE
-        # =====================================
-        # Flat observation vector with key market features
-        # Features:
-        #   - own market share 
-        #   - opponent market share
+    def create(self, episode_index: int) -> UniversalPricingEpisodeContext:
+        episode_seed_bundle = SeedDeriver.derive_episode_bundle(
+            self.run_seed_bundle,
+            episode_index,
+        )
+        assignment = self.opponent_schedule.assignment(episode_index)
+        return UniversalPricingEpisodeContext(
+            episode_index=episode_index,
+            episode_seed_bundle=episode_seed_bundle,
+            opponent_assignment=assignment,
+        )
 
-        #   - own_uniform_price
-        #   - own_price_new
-        #   - own_price_old
-        #
-        #   - opponent_price_uniform
-        #   - opponent_price_new
-        #   - opponent_price_old
 
-        #   - demand_ratio
+class PricingPriceTransform:
+    """Transform normalized pricing controls and bounded market prices."""
 
-        #   - own regime
-        #   - opponent regime
-        #   - profit trend
-        #   - popularity change
+    def __init__(
+        self,
+        *,
+        uniform_min: float = PRICE_UNIFORM_MIN,
+        uniform_max: float = PRICE_UNIFORM_MAX,
+        bbp_new_min: float = PRICE_BBP_NEW_MIN,
+        bbp_new_max: float = PRICE_BBP_NEW_MAX,
+        bbp_old_min: float = PRICE_BBP_OLD_MIN,
+        bbp_old_max: float = PRICE_BBP_OLD_MAX,
+    ) -> None:
+        self.uniform_min = float(uniform_min)
+        self.uniform_max = float(uniform_max)
+        self.bbp_new_min = float(bbp_new_min)
+        self.bbp_new_max = float(bbp_new_max)
+        self.bbp_old_min = float(bbp_old_min)
+        self.bbp_old_max = float(bbp_old_max)
+        if not (
+            self.uniform_min < self.uniform_max
+            and self.bbp_new_min < self.bbp_new_max
+            and self.bbp_old_min < self.bbp_old_max
+            and self.bbp_new_max <= self.bbp_old_max
+        ):
+            raise ProtocolConfigError("Invalid universal pricing bounds")
 
-        obs_dim = 13
+    @staticmethod
+    def _control_fraction(control: float) -> float:
+        value = float(control)
+        if not np.isfinite(value) or value < -1.0 or value > 1.0:
+            raise ValueError("Normalized price control must be in [-1, 1]")
+        return (value + 1.0) / 2.0
+
+    @staticmethod
+    def _normalize_bounded(
+        value: float,
+        lower_bound: float,
+        upper_bound: float,
+    ) -> float:
+        value = float(value)
+        if (
+            not np.isfinite(value)
+            or value < lower_bound - 1e-9
+            or value > upper_bound + 1e-9
+        ):
+            raise ValueError(
+                f"Price must be in [{lower_bound}, {upper_bound}]"
+            )
+        clipped = float(np.clip(value, lower_bound, upper_bound))
+        return 2.0 * (
+            (clipped - lower_bound) / (upper_bound - lower_bound)
+        ) - 1.0
+
+    def controls_to_prices(self, action: PricingAction) -> PriceVector:
+        uniform_fraction = self._control_fraction(action.uniform_control)
+        new_fraction = self._control_fraction(action.bbp_new_control)
+        premium_fraction = self._control_fraction(
+            action.bbp_premium_control
+        )
+        uniform_price = self.uniform_min + uniform_fraction * (
+            self.uniform_max - self.uniform_min
+        )
+        new_price = self.bbp_new_min + new_fraction * (
+            self.bbp_new_max - self.bbp_new_min
+        )
+        old_floor = max(self.bbp_old_min, new_price)
+        old_price = old_floor + premium_fraction * (
+            self.bbp_old_max - old_floor
+        )
+        return PriceVector(
+            uniform=float(uniform_price),
+            new=float(new_price),
+            old=float(old_price),
+        )
+
+    def prices_to_controls(self, prices: PriceVector) -> np.ndarray:
+        uniform_control = self._normalize_bounded(
+            prices.uniform,
+            self.uniform_min,
+            self.uniform_max,
+        )
+        new_control = self._normalize_bounded(
+            prices.new,
+            self.bbp_new_min,
+            self.bbp_new_max,
+        )
+        old_floor = max(self.bbp_old_min, float(prices.new))
+        if (
+            not np.isfinite(prices.old)
+            or prices.old < old_floor - 1e-9
+            or prices.old > self.bbp_old_max + 1e-9
+        ):
+            raise ValueError(
+                "BBP old-customer price must be between its conditional "
+                "floor and maximum"
+            )
+        premium_fraction = (
+            (float(np.clip(prices.old, old_floor, self.bbp_old_max)) - old_floor)
+            / (self.bbp_old_max - old_floor)
+        )
+        premium_control = 2.0 * premium_fraction - 1.0
+        return np.asarray(
+            [uniform_control, new_control, premium_control],
+            dtype=np.float32,
+        )
+
+    def prices_to_observation_features(
+        self,
+        prices: PriceVector,
+    ) -> tuple[float, float, float]:
+        return (
+            self._normalize_bounded(
+                prices.uniform,
+                self.uniform_min,
+                self.uniform_max,
+            ),
+            self._normalize_bounded(
+                prices.new,
+                self.bbp_new_min,
+                self.bbp_new_max,
+            ),
+            self._normalize_bounded(
+                prices.old,
+                self.bbp_old_min,
+                self.bbp_old_max,
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class RegimeDecisionResult:
+    """Proposed and effective regime facts for one transition."""
+
+    proposed_regime: PricingRegime
+    effective_regime: PricingRegime
+    regime_decision_allowed: bool
+    regime_changed: bool
+
+    @property
+    def regime_decision_mask(self) -> float:
+        return 1.0 if self.regime_decision_allowed else 0.0
+
+
+class RegimeCommitmentController:
+    """Enforce fixed-period commitments with an immediate first decision."""
+
+    def __init__(self, commitment_length: int) -> None:
+        if (
+            not isinstance(commitment_length, int)
+            or isinstance(commitment_length, bool)
+            or commitment_length <= 0
+        ):
+            raise ProtocolConfigError(
+                "commitment_length must be a positive integer"
+            )
+        self.commitment_length = commitment_length
+        self.reset()
+
+    def reset(self) -> None:
+        self.effective_regime = PricingRegime.UNIFORM
+        self._remaining_periods = 0
+
+    @property
+    def regime_decision_allowed(self) -> bool:
+        return self._remaining_periods == 0
+
+    @property
+    def commitment_progress(self) -> float:
+        if self.regime_decision_allowed:
+            return 1.0
+        elapsed_periods = self.commitment_length - self._remaining_periods
+        return float(elapsed_periods / self.commitment_length)
+
+    def decide(
+        self,
+        proposed_regime: PricingRegime,
+    ) -> RegimeDecisionResult:
+        proposed_regime = PricingRegime(proposed_regime)
+        allowed = self.regime_decision_allowed
+        previous_regime = self.effective_regime
+        if allowed:
+            self.effective_regime = proposed_regime
+            self._remaining_periods = self.commitment_length
+        return RegimeDecisionResult(
+            proposed_regime=proposed_regime,
+            effective_regime=self.effective_regime,
+            regime_decision_allowed=allowed,
+            regime_changed=allowed
+            and self.effective_regime is not previous_regime,
+        )
+
+    def advance_period(self) -> None:
+        if self._remaining_periods <= 0:
+            raise RuntimeError(
+                "Cannot advance regime commitment before a decision"
+            )
+        self._remaining_periods -= 1
+
+
+class UniversalPricingObservationBuilder:
+    """Build the frozen normalized 18-feature universal observation."""
+
+    def __init__(
+        self,
+        price_transform: PricingPriceTransform,
+        episode_length: int,
+    ) -> None:
+        if episode_length <= 0:
+            raise ProtocolConfigError("episode_length must be positive")
+        self.price_transform = price_transform
+        self.episode_length = episode_length
+
+    @staticmethod
+    def _normalize_ratio(value: float) -> float:
+        if not np.isfinite(value):
+            raise ValueError("Observation ratio must be finite")
+        return float(2.0 * np.clip(value, 0.0, 1.0) - 1.0)
+
+    @staticmethod
+    def _normalize_regime(regime: int) -> float:
+        return -1.0 if PricingRegime(regime) is PricingRegime.UNIFORM else 1.0
+
+    def build(
+        self,
+        market: HotellingMarket,
+        timestep: int,
+        commitment_controller: RegimeCommitmentController,
+    ) -> np.ndarray:
+        agent = market.firms[0]
+        opponent = market.firms[1]
+        if timestep == 0:
+            own_market_share = 0.5
+            opponent_market_share = 0.5
+        else:
+            own_market_share = agent.market_share
+            opponent_market_share = opponent.market_share
+
+        own_price_features = self.price_transform.prices_to_observation_features(
+            PriceVector(
+                uniform=agent.uniform_price,
+                new=agent.price_new,
+                old=agent.price_old,
+            )
+        )
+        opponent_price_features = (
+            self.price_transform.prices_to_observation_features(
+                PriceVector(
+                    uniform=opponent.uniform_price,
+                    new=opponent.price_new,
+                    old=opponent.price_old,
+                )
+            )
+        )
+        demand_ratio = (
+            agent.last_period_quantity / market.num_consumers
+            if market.num_consumers > 0
+            else 0.0
+        )
+        features = {
+            "own_market_share": self._normalize_ratio(own_market_share),
+            "opponent_market_share": self._normalize_ratio(
+                opponent_market_share
+            ),
+            "own_uniform_price": own_price_features[0],
+            "own_bbp_new_price": own_price_features[1],
+            "own_bbp_old_price": own_price_features[2],
+            "opponent_uniform_price": opponent_price_features[0],
+            "opponent_bbp_new_price": opponent_price_features[1],
+            "opponent_bbp_old_price": opponent_price_features[2],
+            "own_demand_ratio": self._normalize_ratio(demand_ratio),
+            "own_new_customer_ratio": self._normalize_ratio(
+                agent.get_new_old_ratio()
+            ),
+            "own_retention_rate": self._normalize_ratio(
+                agent.retention_rate
+            ),
+            "own_regime": self._normalize_regime(agent.pricing_regime),
+            "opponent_regime": self._normalize_regime(
+                opponent.pricing_regime
+            ),
+            "own_profit_trend": float(agent.get_profit_trend()),
+            "own_popularity_change": float(agent.get_popularity_change()),
+            "episode_progress": self._normalize_ratio(
+                min(timestep / self.episode_length, 1.0)
+            ),
+            "regime_commitment_progress": self._normalize_ratio(
+                commitment_controller.commitment_progress
+            ),
+            "regime_decision_allowed": (
+                1.0
+                if commitment_controller.regime_decision_allowed
+                else -1.0
+            ),
+        }
+        return PricingObservationCodec.encode(features)
+
+
+class ProfitRewardNormalizer:
+    """Normalize own raw economic profit against the fixed theoretical bound."""
+
+    def __init__(
+        self,
+        num_consumers: int,
+        maximum_price: float = PRICE_BBP_OLD_MAX,
+        marginal_cost: float = MARGINAL_COST,
+    ) -> None:
+        self.num_consumers = int(num_consumers)
+        self.maximum_price = float(maximum_price)
+        self.marginal_cost = float(marginal_cost)
+        self.maximum_step_profit = self.num_consumers * (
+            self.maximum_price - self.marginal_cost
+        )
+        if self.num_consumers <= 0 or self.maximum_step_profit <= 0:
+            raise ProtocolConfigError("Invalid reward normalization bound")
+
+    def normalize(self, raw_profit: float) -> float:
+        raw_profit = float(raw_profit)
+        if not np.isfinite(raw_profit):
+            raise ValueError("Raw profit must be finite")
+        return float(raw_profit / self.maximum_step_profit)
+
+
+class UniversalPricingEnv(gym.Env):
+    """Single-agent universal pricing environment for the research protocol."""
+
+    metadata = {
+        "render_modes": [],
+        "name": "universal_pricing_v1",
+    }
+
+    INITIAL_PRICES = PriceVector(uniform=2.75, new=2.25, old=3.0)
+
+    def __init__(
+        self,
+        *,
+        consumer_population_spec: ConsumerPopulationSpec,
+        opponent_pool: OpponentPoolConfig,
+        run_seed_bundle: RunSeedBundle,
+        regime_commitment_length: int,
+        num_consumers: int = NUM_CONSUMERS,
+        episode_length: int = EPISODE_LENGTH,
+        consumer_population_generator: ConsumerPopulationGenerator | None = None,
+        price_transform: PricingPriceTransform | None = None,
+    ) -> None:
+        super().__init__()
+        if (
+            not isinstance(num_consumers, int)
+            or isinstance(num_consumers, bool)
+            or num_consumers <= 0
+        ):
+            raise ProtocolConfigError(
+                "num_consumers must be a positive integer"
+            )
+        if (
+            not isinstance(episode_length, int)
+            or isinstance(episode_length, bool)
+            or episode_length <= 0
+        ):
+            raise ProtocolConfigError(
+                "episode_length must be a positive integer"
+            )
+        self.consumer_population_spec = consumer_population_spec
+        self.opponent_pool = opponent_pool
+        self.run_seed_bundle = run_seed_bundle
+        self.num_consumers = num_consumers
+        self.episode_length = episode_length
+        self.consumer_population_generator = (
+            consumer_population_generator or ConsumerPopulationGenerator()
+        )
+        self.price_transform = price_transform or PricingPriceTransform()
+        self.episode_context_factory = UniversalPricingEpisodeContextFactory(
+            run_seed_bundle,
+            opponent_pool,
+        )
+        self.regime_commitment_controller = RegimeCommitmentController(
+            regime_commitment_length
+        )
+        self.observation_builder = UniversalPricingObservationBuilder(
+            self.price_transform,
+            episode_length,
+        )
+        self.reward_normalizer = ProfitRewardNormalizer(num_consumers)
+        self.market = HotellingMarket(
+            num_consumers=num_consumers,
+            seed=run_seed_bundle.consumer_population_seed,
+        )
+
+        self.action_space = spaces.Dict(
+            {
+                "regime": spaces.Discrete(2),
+                "price_controls": spaces.Box(
+                    low=-1.0,
+                    high=1.0,
+                    shape=(3,),
+                    dtype=np.float32,
+                ),
+            }
+        )
         self.observation_space = spaces.Box(
             low=-1.0,
             high=1.0,
-            shape=(obs_dim,),
-            dtype=np.float32
+            shape=(PricingObservationCodec.FEATURE_COUNT,),
+            dtype=np.float32,
         )
 
+        self._episode_context: UniversalPricingEpisodeContext | None = None
+        self._opponent_policy: OpponentPolicy | None = None
         self._timestep = 0
-        self._last_action = 0.5  
-        
-        self._episode_profits = []
-        self._episode_prices = []
-        self._episode_market_shares = []
-    
-    def _action_to_price(self, action: np.ndarray) -> np.ndarray:
-        """Convert normalized action [-1, 1] to actual price.
-            Input tensor : (uniform_price, bbp_price_new, bbp_price_old)
-        """
+        self._raw_agent_profits: list[float] = []
+        self._raw_opponent_profits: list[float] = []
+        self._normalized_rewards: list[float] = []
 
-        normalized = (action + 1.0) / 2.0 
-        normalized = np.clip(normalized, 0.0, 1.0)        
-        uniform_price = PRICE_UNIFORM_MIN + normalized[0] * (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN)
-        bbp_price_new = PRICE_BBP_NEW_MIN + normalized[1] * (PRICE_BBP_NEW_MAX - PRICE_BBP_NEW_MIN)
-        bbp_price_old = PRICE_BBP_OLD_MIN + normalized[2] * (PRICE_BBP_OLD_MAX - PRICE_BBP_OLD_MIN)
-        return np.array([uniform_price, bbp_price_new, bbp_price_old])
-    
-    def _prices_to_normalized (self, prices : np.ndarray)-> np.ndarray:
-        uniform_price = float(prices[0])
-        bbp_price_new = float(prices[1])
-        bbp_price_old = float(prices[2])
+    @property
+    def episode_context(self) -> UniversalPricingEpisodeContext:
+        if self._episode_context is None:
+            raise RuntimeError("Environment must be reset before use")
+        return self._episode_context
 
-        uniform_normalized = self._uniform_price_to_normalized(uniform_price)
-        bbp_new_normalized , bbp_old_normalized = self._bbp_price_to_normalized(bbp_price_new, bbp_price_old)
+    @property
+    def opponent_policy(self) -> OpponentPolicy:
+        if self._opponent_policy is None:
+            raise RuntimeError("Environment must be reset before use")
+        return self._opponent_policy
 
-        return np.array([uniform_normalized, bbp_new_normalized, bbp_old_normalized])
-
-
-
-    def _uniform_price_to_normalized(self, price: float) -> float:
-        """Convert actual price to normalized [-1, 1] value."""
-        normalized =  (price - PRICE_UNIFORM_MIN) / (PRICE_UNIFORM_MAX - PRICE_UNIFORM_MIN)
-        normalized = 2.0 * normalized - 1.0
-        return normalized
-    
-    def _bbp_price_to_normalized (self , price_new: float, price_old : float) -> Tuple[float, float]:
-        price_new_normalized = (price_new- PRICE_BBP_NEW_MIN) / (PRICE_BBP_NEW_MAX - PRICE_BBP_NEW_MIN)
-        price_old_normalized = (price_old- PRICE_BBP_OLD_MIN) / (PRICE_BBP_OLD_MAX - PRICE_BBP_OLD_MIN)
-        price_new_normalized , price_old_normalized = price_new_normalized* 2.0 -1 , price_old_normalized* 2.0 - 1
-        return price_new_normalized , price_old_normalized
-
-    def _normalize_market_share (self, market_share: float) -> float:
-        """Convert market share to normalized [-1, 1]"""
-        normalized = market_share*2.0 -1
-        return normalized
-    
-    def _normalize_demand_ratio (self, demand_ratio : float) -> float:
-        """Convert demand ratio to normalized [-1, 1]"""
-        normalized = demand_ratio* 2.0 -1
-        return normalized
-    
-    def _normalize_regime(self, regime : int) -> float:
-        """Conver regime to normalized [-1, 1]"""
-        normalized = float(regime) * 2.0 - 1.0
-        return normalized
-
-    
-    
-    def _get_observation(self) -> np.ndarray:
-        """
-        Build observation vector from current market state.
-        
-        Returns:
-            Flat observation array
-        """
-        firm = self.market.firms[0] 
-        firm_prices = np.array([firm.uniform_price, firm.price_new, firm.price_old]) # Learning agent is firm 0
-        opponent = self.market.firms[1]
-        opponent_prices = np.array([opponent.uniform_price, opponent.price_new, opponent.price_old])
-        
-        # Market share
-        own_market_share_norm = self._normalize_market_share(firm.market_share)
-        opp_market_share_norm = self._normalize_market_share(opponent.market_share)
-
-        
-        
-        # Prices (normalized)
-        own_uniform_price_norm, own_bbp_price_new_norm, own_bbp_price_old_norm  = self._prices_to_normalized(firm_prices)
-        opp_uniform_price_norm, opp_bbp_price_new_norm, opp_bbp_price_old_norm  = self._prices_to_normalized(opponent_prices)
-        # Demand ratio
-        demand_ratio = firm.last_period_quantity / self.num_consumers if self.num_consumers > 0 else 0.0
-        demand_ratio_norm = self._normalize_demand_ratio (demand_ratio)
-        
-        own_regime_norm = self._normalize_regime(firm.pricing_regime)
-        opponent_regime_norm = self._normalize_regime(opponent.pricing_regime)
-        # Profit trend
-        profit_trend = firm.get_profit_trend()
-        
-        # Popularity change
-        pop_change = firm.get_popularity_change()
-        
-        obs = np.array([
-            own_market_share_norm,
-            opp_market_share_norm,
-
-            own_uniform_price_norm,
-            own_bbp_price_new_norm,
-            own_bbp_price_old_norm,
-
-            opp_uniform_price_norm,
-            opp_bbp_price_new_norm,
-            opp_bbp_price_old_norm,
-
-            demand_ratio_norm,
-
-            own_regime_norm,
-            opponent_regime_norm,
-            profit_trend,
-            pop_change
-
-        ], dtype=np.float32)
-        
-        
-        return obs
-    
-    def _get_opponent_observation(
+    def _resolve_episode_context(
         self,
-        competitor_prices: Optional[Dict[str, float]] = None,
-    ) -> OpponentObservation:
-        """Create the opponent view using current submitted agent prices.
-
-        ``competitor_prices`` is supplied during ``step`` because the market's
-        stored firm prices still describe the previous period until
-        :meth:`HotellingMarket.step` executes.
-        """
-        opponent = self.market.firms[1]
-        firm = self.market.firms[0]
-        
-        opp_market_share = opponent.market_share 
-        competitor_market_share = firm.market_share
-     
-        own_uniform_price = opponent.uniform_price
-        own_price_new = opponent.price_new
-        own_price_old = opponent.price_old
-     
-
-        competitor_uniform_price = firm.uniform_price
-        competitor_bbp_price_new = firm.price_new
-        competitor_bbp_price_old = firm.price_old
-        
-        own_regime = opponent.pricing_regime
-        competitor_regime = firm.pricing_regime
-        previous = PreviousMarketState(
-            own_market_share=opp_market_share,
-            competitor_market_share=competitor_market_share,
-            own_prices=PriceVector(
-                uniform=own_uniform_price,
-                new=own_price_new,
-                old=own_price_old,
-            ),
-            competitor_prices=PriceVector(
-                uniform=competitor_uniform_price,
-                new=competitor_bbp_price_new,
-                old=competitor_bbp_price_old,
-            ),
-            own_demand_ratio=(
-                opponent.last_period_quantity / self.num_consumers
-                if self.num_consumers > 0 else 0.5
-            ),
-            own_new_customer_ratio=opponent.get_new_old_ratio(),
-        )
-        submission = (
-            PriceVector(
-                uniform=float(competitor_prices["uniform_price"]),
-                new=float(competitor_prices["price_new"]),
-                old=float(competitor_prices["price_old"]),
+        seed: int | None,
+        options: Mapping[str, Any] | None,
+    ) -> tuple[UniversalPricingEpisodeContext, str]:
+        options = {} if options is None else dict(options)
+        unknown_options = set(options) - {"episode_index"}
+        if unknown_options:
+            raise ValueError(
+                "Unknown reset option(s): "
+                + ", ".join(sorted(unknown_options))
             )
-            if competitor_prices is not None else None
+        has_episode_index = "episode_index" in options
+        if seed is not None and has_episode_index:
+            raise ValueError(
+                "Ad-hoc seed and protocol episode_index are mutually exclusive"
+            )
+        if seed is not None:
+            if (
+                not isinstance(seed, (int, np.integer))
+                or isinstance(seed, (bool, np.bool_))
+                or int(seed) < 0
+            ):
+                raise ValueError("seed must be a nonnegative integer")
+            temporary_run_bundle = SeedDeriver.derive_run_bundle(int(seed))
+            temporary_factory = UniversalPricingEpisodeContextFactory(
+                temporary_run_bundle,
+                self.opponent_pool,
+            )
+            return temporary_factory.create(0), "ad_hoc"
+        episode_index = options.get("episode_index", 0)
+        return self.episode_context_factory.create(episode_index), "protocol"
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: Mapping[str, Any] | None = None,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        super().reset(seed=seed)
+        context, seed_source = self._resolve_episode_context(seed, options)
+        population = self.consumer_population_generator.generate(
+            self.consumer_population_spec,
+            self.num_consumers,
+            context.episode_seed_bundle.consumer_seed,
         )
+        self.market.install_consumer_population(population)
+        self.market.set_prices(
+            {
+                "uniform_price": self.INITIAL_PRICES.uniform,
+                "price_new": self.INITIAL_PRICES.new,
+                "price_old": self.INITIAL_PRICES.old,
+            },
+            {
+                "uniform_price": self.INITIAL_PRICES.uniform,
+                "price_new": self.INITIAL_PRICES.new,
+                "price_old": self.INITIAL_PRICES.old,
+            },
+        )
+
+        assignment = context.opponent_assignment
+        opponent_policy = create_preset_opponent(
+            assignment.policy_name,
+            seed=assignment.opponent_seed,
+        )
+        opponent_policy.reset(seed=assignment.opponent_seed)
+        expected_regime = (
+            PricingRegime.UNIFORM
+            if assignment.opponent_family is OpponentFamily.UNIFORM
+            else PricingRegime.BBP
+        )
+        if PricingRegime(opponent_policy.regime) is not expected_regime:
+            raise ProtocolConfigError(
+                "Scheduled opponent family does not match policy regime"
+            )
+
+        self._episode_context = context
+        self._opponent_policy = opponent_policy
+        self._timestep = 0
+        self.regime_commitment_controller.reset()
+        self.market.set_regimes(
+            PricingRegime.UNIFORM,
+            expected_regime,
+        )
+        self._raw_agent_profits = []
+        self._raw_opponent_profits = []
+        self._normalized_rewards = []
+
+        observation = self.observation_builder.build(
+            self.market,
+            self._timestep,
+            self.regime_commitment_controller,
+        )
+        info = {
+            "episode_index": context.episode_index,
+            "consumer_seed": context.episode_seed_bundle.consumer_seed,
+            "opponent_seed": context.episode_seed_bundle.opponent_seed,
+            "opponent_policy_name": assignment.policy_name,
+            "opponent_family": assignment.opponent_family.value,
+            "seed_source": seed_source,
+        }
+        return observation, info
+
+    def _agent_submission(
+        self,
+        transformed_prices: PriceVector,
+        effective_regime: PricingRegime,
+    ) -> tuple[dict[str, float], PriceVector]:
+        agent = self.market.firms[0]
+        if effective_regime is PricingRegime.UNIFORM:
+            market_prices = {
+                "uniform_price": transformed_prices.uniform,
+            }
+            submission = PriceVector(
+                uniform=transformed_prices.uniform,
+                new=agent.price_new,
+                old=agent.price_old,
+            )
+        else:
+            market_prices = {
+                "price_new": transformed_prices.new,
+                "price_old": transformed_prices.old,
+            }
+            submission = PriceVector(
+                uniform=agent.uniform_price,
+                new=transformed_prices.new,
+                old=transformed_prices.old,
+            )
+        return market_prices, submission
+
+    def _build_opponent_observation(
+        self,
+        agent_submission: PriceVector,
+    ) -> OpponentObservation:
+        opponent = self.market.firms[1]
+        agent = self.market.firms[0]
+        if self._timestep == 0:
+            opponent_market_share = 0.5
+            agent_market_share = 0.5
+        else:
+            opponent_market_share = opponent.market_share
+            agent_market_share = agent.market_share
         return OpponentObservation(
-            previous=previous,
-            competitor_submission=submission,
+            previous=PreviousMarketState(
+                own_market_share=opponent_market_share,
+                competitor_market_share=agent_market_share,
+                own_prices=PriceVector(
+                    uniform=opponent.uniform_price,
+                    new=opponent.price_new,
+                    old=opponent.price_old,
+                ),
+                competitor_prices=PriceVector(
+                    uniform=agent.uniform_price,
+                    new=agent.price_new,
+                    old=agent.price_old,
+                ),
+                own_demand_ratio=(
+                    opponent.last_period_quantity / self.num_consumers
+                    if self.num_consumers > 0
+                    else 0.0
+                ),
+                own_new_customer_ratio=opponent.get_new_old_ratio(),
+            ),
+            competitor_submission=agent_submission,
             competitor_established_share=self.market.get_established_share(0),
-            own_regime=own_regime,
-            competitor_regime=competitor_regime,
+            own_regime=opponent.pricing_regime,
+            competitor_regime=agent.pricing_regime,
             decision_period=self._timestep,
             state_period=self._timestep - 1,
             episode_length=self.episode_length,
         )
-    
-    def reset(
-        self,
-        *,
-        seed: Optional[int] = None,
-        options: Optional[Dict] = None
-    ) -> Tuple[np.ndarray, Dict]:
-        """
-        Reset environment for new episode.
-        
-        Args:
-            seed: Random seed for reproducibility
-            options: Additional options (unused)
-            
-        Returns:
-            observation, info
-        """
-        if seed is not None:
-            self.seed_value = seed
-        
-        # Reset market
-        self.market.reset(seed=self.seed_value)
-        
-        own_regime = 0 if self.environment_type == "uniform_pricing" else 1
 
-        self.market.set_regimes(own_regime, self.opponent_policy.regime)
-        
-        # Reset opponent policy
-        self.opponent_policy.reset(seed=seed)
-        
-        # Reset state tracking
-        self._timestep = 0
-        self._last_action = 0.5
-        self._episode_profits = []
-        self._episode_prices = []
-        self._episode_market_shares = []
-        
-        # Set initial prices
-        initial_uniform_price = 5
-        initial_bbp_price_new = 4.5
-        initial_bbp_price_old = 5.5
-        
-        self.market.firms[0].set_prices(
-            uniform_price=initial_uniform_price, 
-            price_new= initial_bbp_price_new, 
-            price_old=initial_bbp_price_old
-            )
-        
-        obs = self._get_observation()
-        info = {
-            "timestep": 0,
-            "market_share": self.market.firms[0].market_share,
-            "uniform_price": initial_uniform_price,
-            "bbp_price_new": initial_bbp_price_new,
-            "bbp_price_old" : initial_bbp_price_old
-        }
-
-        
-        return obs, info
-    
     def step(
         self,
-        action: np.ndarray
-    ) -> Tuple[np.ndarray, float, bool, bool, Dict]:
-        """
-        Execute one environment step.
-        
-        Args:
-            action: Normalized price action [-1, 1]
-            
-        Returns:
-            observation, reward, terminated, truncated, info
-        """
-        # Convert action to price
-        agent_price = self._action_to_price(action)
-        self._last_action = action
+        action: Mapping[str, Any],
+    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        if self._episode_context is None or self._opponent_policy is None:
+            raise RuntimeError("Environment must be reset before step")
+        structured_action = PricingActionCodec.from_gym(action)
+        decision = self.regime_commitment_controller.decide(
+            structured_action.regime
+        )
+        transformed_prices = self.price_transform.controls_to_prices(
+            structured_action
+        )
+        agent_market_prices, agent_submission = self._agent_submission(
+            transformed_prices,
+            decision.effective_regime,
+        )
 
-        agent_prices = {
-            "uniform_price": agent_price[0],
-            "price_new": agent_price[1],
-            "price_old": agent_price[2],
-        }
+        self.market.set_regimes(
+            decision.effective_regime,
+            self.opponent_policy.regime,
+        )
+        opponent_observation = self._build_opponent_observation(
+            agent_submission
+        )
+        opponent_prices = self.opponent_policy.get_prices(
+            opponent_observation
+        )
+        opponent_price_vector = PriceVector(
+            uniform=float(opponent_prices["uniform_price"]),
+            new=float(opponent_prices["price_new"]),
+            old=float(opponent_prices["price_old"]),
+        )
+        self.market.step(agent_market_prices, opponent_prices)
 
-        own_regime = 0 if self.environment_type == "uniform_pricing" else 1
-        self.market.set_regimes(own_regime, self.opponent_policy.regime)
+        raw_agent_profit = float(self.market.firms[0].last_period_profit)
+        raw_opponent_profit = float(self.market.firms[1].last_period_profit)
+        normalized_reward = self.reward_normalizer.normalize(raw_agent_profit)
+        self._raw_agent_profits.append(raw_agent_profit)
+        self._raw_opponent_profits.append(raw_opponent_profit)
+        self._normalized_rewards.append(normalized_reward)
 
-        # The myopic opponent is a within-period follower and therefore sees
-        # the agent's current submitted prices rather than last period's prices.
-        opp_obs = self._get_opponent_observation(agent_prices)
-        opp_prices = self.opponent_policy.get_prices(opp_obs)
-
-        opp_prices_dict = {
-            "uniform_price": opp_prices.get("uniform_price", opp_prices.get("price_new", 5.0)),
-            "price_new": opp_prices.get("price_new", opp_prices.get("uniform_price", 5.0)),
-            "price_old": opp_prices.get("price_old", opp_prices.get("price_new", 5.0)),
-        }
-
-        # Execute market step
-        demand_0, demand_1 = self.market.step(agent_prices, opp_prices_dict)
-        
-        # Increment timestep
         self._timestep += 1
-        
-        # Get reward (profit)
-        own_profit = float(self.market.firms[0].last_period_profit)
-        opponent_profit = float(self.market.firms[1].last_period_profit)
-        
-        if own_profit - opponent_profit > 0:
-
-            reward =  10 * (own_profit - opponent_profit)
-        else :
-            reward = (own_profit - opponent_profit)
-        # Track metrics
-        self._episode_profits.append(own_profit)
-        self._episode_prices.append(agent_price)
-        self._episode_market_shares.append(self.market.firms[0].market_share)
-        
-        # Check termination
-        terminated = False  # No early termination
+        self.regime_commitment_controller.advance_period()
+        terminated = False
         truncated = self._timestep >= self.episode_length
-        
-        # Build observation
-        obs = self._get_observation()
-        
-        # Build info dict
-        info = {
-            "timestep": self._timestep,
-            "profit": own_profit,
-            
-            "uniform_price": float(agent_price[0]),
-            "bbp_price_new" : float(agent_price[1]),
-            "bbp_price_old": float(agent_price[2]),
+        observation = self.observation_builder.build(
+            self.market,
+            self._timestep,
+            self.regime_commitment_controller,
+        )
 
-            "market_share": self.market.firms[0].market_share,
-            "demand": demand_0,
-           
-            "opponent_price_uniform": opp_prices_dict['uniform_price'],
-            "opponent_price_new": opp_prices_dict["price_new"],
-            "opponent_price_old": opp_prices_dict["price_old"],
-           
-            "opponent_profit": float(self.market.firms[1].last_period_profit),
-           
-            "opponent_demand": demand_1,
-           
-            "opponent_regime" : self.market.firms[1].pricing_regime,
-            "regime" : self.market.firms[0].pricing_regime
+        effective_action = PricingAction(
+            regime=decision.effective_regime,
+            uniform_control=structured_action.uniform_control,
+            bbp_new_control=structured_action.bbp_new_control,
+            bbp_premium_control=structured_action.bbp_premium_control,
+        )
+        context = self.episode_context
+        info: dict[str, Any] = {
+            "raw_agent_profit": raw_agent_profit,
+            "raw_opponent_profit": raw_opponent_profit,
+            "profit_advantage": raw_agent_profit - raw_opponent_profit,
+            "normalized_reward": normalized_reward,
+            "agent_regime": int(decision.effective_regime),
+            "opponent_regime": int(self.opponent_policy.regime),
+            "regime_changed": decision.regime_changed,
+            "regime_decision_allowed": decision.regime_decision_allowed,
+            "opponent_policy_name": (
+                context.opponent_assignment.policy_name
+            ),
+            "episode_index": context.episode_index,
+            "consumer_seed": context.episode_seed_bundle.consumer_seed,
+            "opponent_seed": context.episode_seed_bundle.opponent_seed,
+            "regime_decision_mask": decision.regime_decision_mask,
+            "effective_replay_action": (
+                PricingActionCodec.to_replay_vector(effective_action)
+            ),
+            "opponent_price_controls": (
+                self.price_transform.prices_to_controls(
+                    opponent_price_vector
+                )
+            ),
         }
-        
-        # Add episode summary on termination
-        if truncated or terminated:
+        if truncated:
             info["episode_summary"] = {
-                "total_profit": sum(self._episode_profits),
-                "mean_profit": np.mean(self._episode_profits),
-                "mean_price": np.mean(self._episode_prices),
-                "mean_market_share": np.mean(self._episode_market_shares),
-                "final_market_share": self._episode_market_shares[-1] if self._episode_market_shares else 0.0,
+                "raw_agent_profit_total": float(
+                    np.sum(self._raw_agent_profits)
+                ),
+                "raw_opponent_profit_total": float(
+                    np.sum(self._raw_opponent_profits)
+                ),
+                "profit_advantage_total": float(
+                    np.sum(self._raw_agent_profits)
+                    - np.sum(self._raw_opponent_profits)
+                ),
+                "normalized_reward_total": float(
+                    np.sum(self._normalized_rewards)
+                ),
+                "normalized_reward_mean": float(
+                    np.mean(self._normalized_rewards)
+                ),
             }
-        
-        return obs, reward, terminated, truncated, info
-    
-    def render(self):
-        """Render environment (not implemented)."""
-        pass
-    
-    def close(self):
-        """Close environment."""
-        pass
+        return (
+            observation,
+            normalized_reward,
+            terminated,
+            truncated,
+            info,
+        )
 
+    def render(self) -> None:
+        return None
 
-# =============================================================================
-# FACTORY FUNCTIONS
-# =============================================================================
-
-def make_pricing_env(
-    environment_type : EnvironmentType ,
-    opponent: Union[str, OpponentPolicy] = "passive_uniform",
-    **env_kwargs
-) -> PricingEnv:
-    """
-    Factory function to create pricing environment.
-    
-    Args:
-        opponent: Opponent preset name or OpponentPolicy instance
-        **env_kwargs: Additional environment arguments
-        
-    Returns:
-        UniformPricingEnv instance
-    """
-    if isinstance(opponent, str):
-        opponent_policy = create_preset_opponent(opponent)
-        
-    else:
-        opponent_policy = opponent
-
-    
-    print(f'Training is initialized with opponent police: {opponent_policy}')
-    return PricingEnv(
-        environment_type,
-        opponent_policy=opponent_policy,
-        **env_kwargs
-    )
-
-
-
+    def close(self) -> None:
+        return None

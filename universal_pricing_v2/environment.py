@@ -25,7 +25,7 @@ from env.pricing_contracts import (
     PricingObservationCodec,
     PricingRegime,
 )
-from env.universal_pricing_env import (
+from env.pricing_env import (
     PricingPriceTransform,
     RegimeCommitmentController,
     RegimeDecisionResult,

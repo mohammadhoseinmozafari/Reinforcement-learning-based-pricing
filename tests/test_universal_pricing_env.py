@@ -13,11 +13,11 @@ from env.pricing_contracts import (
     PricingRegime,
     REQUIRED_PRICING_STEP_INFO_FIELDS,
 )
-from env.universal_pricing_env import (
+from env.pricing_env import (
     PricingPriceTransform,
     RegimeCommitmentController,
 )
-from env.universal_pricing_factory import (
+from env.pricing_factory import (
     UniversalPricingEnvironmentFactory,
 )
 from train.universal_pricing_protocol import (

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from config.constants import EPISODE_LENGTH, NUM_CONSUMERS
-from env.universal_pricing_env import UniversalPricingEnv
+from env.pricing_env import UniversalPricingEnv
 from train.universal_pricing_protocol import (
     ExperimentCoordinate,
     ExperimentMatrix,

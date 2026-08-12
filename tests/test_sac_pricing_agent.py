@@ -14,7 +14,7 @@ from env.pricing_contracts import (
     PricingObservationFeature,
     PricingRegime,
 )
-from env.universal_pricing_factory import UniversalPricingEnvironmentFactory
+from env.pricing_factory import UniversalPricingEnvironmentFactory
 from models.sac_pricing import (
     HybridPricingActionTensorCodec,
     HybridPricingPolicyOutput,

@@ -13,7 +13,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from env.pricing_contracts import PricingActionCodec, PricingRegime
-from env.universal_pricing_factory import UniversalPricingEnvironmentFactory
+from env.pricing_factory import UniversalPricingEnvironmentFactory
 from models.universal_pricing_agents import UniversalPricingAgentFactory
 from models.universal_pricing_replay import UniversalPricingTransition
 from train.universal_pricing_protocol import (

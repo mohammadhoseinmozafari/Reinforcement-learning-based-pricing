@@ -21,8 +21,8 @@ mastery_gate:
   strategy_bbp_accuracy: 0.80
 
 training_budget:
-  uniform_pricing_steps: 180000
-  bbp_pricing_steps: 220000
+  uniform_pricing_steps: 60000
+  bbp_pricing_steps: 60000
   strategy_total_steps: 200000
   strategy_frozen_minimum_steps: 50000
   strategy_frozen_maximum_steps: 100000
@@ -33,25 +33,11 @@ training_budget:
 
 curricula:
   uniform_pricing:
-    - {name: Uniform Fixed, opponent_policy_name: uniform_fixed, minimum_steps: 5000, maximum_steps: 12000}
-    - {name: Uniform Random, opponent_policy_name: uniform_random, minimum_steps: 5000, maximum_steps: 12000}
-    - {name: Uniform Undercutter, opponent_policy_name: uniform_undercutter, minimum_steps: 8000, maximum_steps: 18000}
-    - {name: Uniform Tit-for-Tat, opponent_policy_name: uniform_tit_for_tat, minimum_steps: 8000, maximum_steps: 18000}
-    - {name: Uniform Myopic, opponent_policy_name: uniform_myopic, minimum_steps: 12000, maximum_steps: 30000}
-    - {name: BBP Fixed Discriminator, opponent_policy_name: bbp_fixed_discriminator, minimum_steps: 5000, maximum_steps: 12000}
-    - {name: BBP Acquisition Predator, opponent_policy_name: bbp_acquisition_predator, minimum_steps: 8000, maximum_steps: 20000}
-    - {name: BBP Loyalty Harvester, opponent_policy_name: bbp_loyalty_harvester, minimum_steps: 8000, maximum_steps: 20000}
-    - {name: BBP Myopic Segment Optimizer, opponent_policy_name: bbp_myopic_segment_optimizer, minimum_steps: 12000, maximum_steps: 38000}
+    - {name: Uniform Fixed, opponent_policy_name: uniform_fixed, minimum_steps: 5000, maximum_steps: 30000}
+    - {name: BBP Fixed Discriminator, opponent_policy_name: bbp_fixed_discriminator, minimum_steps: 5000, maximum_steps: 30000}
   bbp_pricing:
-    - {name: Uniform Fixed, opponent_policy_name: uniform_fixed, minimum_steps: 6000, maximum_steps: 15000}
-    - {name: Uniform Random, opponent_policy_name: uniform_random, minimum_steps: 6000, maximum_steps: 15000}
-    - {name: Uniform Undercutter, opponent_policy_name: uniform_undercutter, minimum_steps: 10000, maximum_steps: 20000}
-    - {name: Uniform Tit-for-Tat, opponent_policy_name: uniform_tit_for_tat, minimum_steps: 10000, maximum_steps: 20000}
-    - {name: Uniform Myopic, opponent_policy_name: uniform_myopic, minimum_steps: 15000, maximum_steps: 35000}
-    - {name: BBP Fixed Discriminator, opponent_policy_name: bbp_fixed_discriminator, minimum_steps: 6000, maximum_steps: 15000}
-    - {name: BBP Acquisition Predator, opponent_policy_name: bbp_acquisition_predator, minimum_steps: 10000, maximum_steps: 25000}
-    - {name: BBP Loyalty Harvester, opponent_policy_name: bbp_loyalty_harvester, minimum_steps: 10000, maximum_steps: 25000}
-    - {name: BBP Myopic Segment Optimizer, opponent_policy_name: bbp_myopic_segment_optimizer, minimum_steps: 15000, maximum_steps: 50000}
+    - {name: Uniform Fixed, opponent_policy_name: uniform_fixed, minimum_steps: 6000, maximum_steps: 30000}
+    - {name: BBP Fixed Discriminator, opponent_policy_name: bbp_fixed_discriminator, minimum_steps: 6000, maximum_steps: 30000}
 
 agent_profiles:
   sac:

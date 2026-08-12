@@ -16,10 +16,10 @@ def __getattr__(name):
         from env.pricing_env import PricingEnv, make_pricing_env
         return {"PricingEnv": PricingEnv, "make_pricing_env": make_pricing_env}[name]
     if name == "UniversalPricingEnv":
-        from env.universal_pricing_env import UniversalPricingEnv
+        from env.pricing_env import UniversalPricingEnv
         return UniversalPricingEnv
     if name == "UniversalPricingEnvironmentFactory":
-        from env.universal_pricing_factory import (
+        from env.pricing_factory import (
             UniversalPricingEnvironmentFactory,
         )
         return UniversalPricingEnvironmentFactory

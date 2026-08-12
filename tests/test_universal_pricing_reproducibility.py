@@ -11,7 +11,7 @@ import torch
 from env.consumer_population import ConsumerPopulationSnapshot
 from env.models import HotellingMarket
 from env.pricing_contracts import PricingAction, PricingActionCodec, PricingRegime
-from env.universal_pricing_factory import UniversalPricingEnvironmentFactory
+from env.pricing_factory import UniversalPricingEnvironmentFactory
 from train.universal_pricing_protocol import (
     AgentArchitecture,
     ExperimentMatrix,

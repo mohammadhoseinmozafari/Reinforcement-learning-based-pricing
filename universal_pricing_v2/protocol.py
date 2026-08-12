@@ -309,14 +309,7 @@ class OpponentCurriculumStageSpec:
 
 EXPECTED_OPPONENT_ORDER = (
     "uniform_fixed",
-    "uniform_random",
-    "uniform_undercutter",
-    "uniform_tit_for_tat",
-    "uniform_myopic",
     "bbp_fixed_discriminator",
-    "bbp_acquisition_predator",
-    "bbp_loyalty_harvester",
-    "bbp_myopic_segment_optimizer",
 )
 
 
