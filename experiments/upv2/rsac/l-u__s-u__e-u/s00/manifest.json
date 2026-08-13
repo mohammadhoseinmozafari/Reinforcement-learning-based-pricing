@@ -1,0 +1,423 @@
+{
+  "artifact_references": {},
+  "configuration_hash": "65c9de891ab14b7e6bef1e56896ef2c9960d97025d4fa59ddb4eec7db82a0472",
+  "coordinate": {
+    "agent_architecture": "rsac",
+    "distribution_combination": {
+      "exclusivity": "uniform",
+      "location": "uniform",
+      "strategicness": "uniform"
+    },
+    "training_seed_index": 0
+  },
+  "curriculum_state": {
+    "consecutive_mastery_passes": 0,
+    "consolidation": false,
+    "last_validation_stage_step": 0,
+    "mastery_failures": [],
+    "phase": "uniform_pricing",
+    "phase_environment_steps": 0,
+    "phase_local_episode_index": 0,
+    "stage_environment_steps": 0,
+    "stage_index": 0,
+    "stage_local_episode_index": 0,
+    "stage_outcomes": [],
+    "strategy_environment_steps": 0,
+    "total_environment_steps": 0
+  },
+  "git_commit": "05598e3597529d01563bdefbac09eac3a410f78c",
+  "hardware_metadata": {
+    "bbp_controller_parameters": 209415,
+    "cuda": "13.0",
+    "device": "cuda",
+    "gpu_name": "NVIDIA GeForce RTX 2060 SUPER",
+    "numpy": "2.3.5",
+    "platform": "Windows-10-10.0.19044-SP0",
+    "python": "3.14.5",
+    "strategy_controller_parameters": 175879,
+    "torch": "2.9.1+cu130",
+    "total_parameters": 593043,
+    "uniform_controller_parameters": 207749
+  },
+  "protocol_version": "universal_pricing_v2",
+  "resolved_protocol": {
+    "action_contract_version": "pricing_action_v1",
+    "agent_profiles": {
+      "oe_rsac": {
+        "actor_learning_rate": 0.0003,
+        "architecture": "oe_rsac",
+        "auxiliary_loss_weight": 1.0,
+        "batch_size": 64,
+        "critic_learning_rate": 0.0003,
+        "encoder_hidden_dimension": 128,
+        "encoder_learning_rate": 0.0005,
+        "entropy_learning_rate": 0.0001,
+        "episode_replay_capacity": 1000,
+        "gamma_price": 0.99,
+        "gamma_strategy": 0.9043820750088044,
+        "gradient_clip_norm": 1000.0,
+        "initial_temperature": 0.2,
+        "joint_price_learning_rate": 3e-05,
+        "opponent_embedding_dimension": 32,
+        "price_burn_in_length": 16,
+        "price_sequence_length": 16,
+        "pricing_hidden_dimensions": [
+          128
+        ],
+        "pricing_replay_capacity": 300000,
+        "recurrent_hidden_dimension": 128,
+        "strategy_burn_in_length": 2,
+        "strategy_hidden_dimensions": [
+          128
+        ],
+        "strategy_replay_capacity": 100000,
+        "strategy_sequence_length": 8,
+        "tau": 0.005
+      },
+      "rsac": {
+        "actor_learning_rate": 0.0005,
+        "architecture": "rsac",
+        "batch_size": 64,
+        "critic_learning_rate": 0.0005,
+        "entropy_learning_rate": 0.0003,
+        "episode_replay_capacity": 1000,
+        "gamma_price": 0.99,
+        "gamma_strategy": 0.9043820750088044,
+        "gradient_clip_norm": 10.0,
+        "initial_temperature": 0.6,
+        "joint_price_learning_rate": 3e-05,
+        "price_burn_in_length": 16,
+        "price_sequence_length": 16,
+        "pricing_hidden_dimensions": [
+          128
+        ],
+        "pricing_replay_capacity": 300000,
+        "recurrent_hidden_dimension": 128,
+        "strategy_burn_in_length": 2,
+        "strategy_hidden_dimensions": [
+          128
+        ],
+        "strategy_replay_capacity": 100000,
+        "strategy_sequence_length": 8,
+        "tau": 0.005
+      },
+      "sac": {
+        "actor_learning_rate": 0.0005,
+        "architecture": "sac",
+        "batch_size": 256,
+        "critic_learning_rate": 0.0005,
+        "entropy_learning_rate": 0.0003,
+        "gamma_price": 0.99,
+        "gamma_strategy": 0.9043820750088044,
+        "gradient_clip_norm": 10.0,
+        "initial_temperature": 0.6,
+        "joint_price_learning_rate": 3e-05,
+        "pricing_hidden_dimensions": [
+          128,
+          128
+        ],
+        "pricing_replay_capacity": 300000,
+        "strategy_hidden_dimensions": [
+          128,
+          128
+        ],
+        "strategy_replay_capacity": 100000,
+        "tau": 0.005
+      }
+    },
+    "artifact_root": "experiments\\upv2",
+    "bbp_curriculum": {
+      "phase_budget_steps": 60000,
+      "pricing_skill": "bbp",
+      "stages": [
+        {
+          "maximum_steps": 30000,
+          "minimum_steps": 6000,
+          "name": "Uniform Fixed",
+          "opponent_policy_name": "uniform_fixed"
+        },
+        {
+          "maximum_steps": 30000,
+          "minimum_steps": 6000,
+          "name": "BBP Fixed Discriminator",
+          "opponent_policy_name": "bbp_fixed_discriminator"
+        }
+      ]
+    },
+    "bbp_operating_cost_rate": 0.01,
+    "consumer_distributions": {
+      "exclusivity": {
+        "truncated_normal": {
+          "high": 1.0,
+          "low": 0.0,
+          "mean": 0.5,
+          "standard_deviation": 0.2
+        },
+        "truncated_skew_normal": {
+          "high": 1.0,
+          "location": 0.2457160185,
+          "low": 0.0,
+          "scale": 0.3497947666,
+          "shape": 5.0
+        },
+        "uniform": {
+          "high": 1.0,
+          "low": 0.0
+        }
+      },
+      "location": {
+        "truncated_normal": {
+          "high": 1.0,
+          "low": 0.0,
+          "mean": 0.5,
+          "standard_deviation": 0.2
+        },
+        "truncated_skew_normal": {
+          "high": 1.0,
+          "location": 0.2457160185,
+          "low": 0.0,
+          "scale": 0.3497947666,
+          "shape": 5.0
+        },
+        "uniform": {
+          "high": 1.0,
+          "low": 0.0
+        }
+      },
+      "strategicness": {
+        "truncated_normal": {
+          "high": 1.0,
+          "low": 0.0,
+          "mean": 0.5,
+          "standard_deviation": 0.2
+        },
+        "truncated_skew_normal": {
+          "high": 1.0,
+          "location": 0.2457160185,
+          "low": 0.0,
+          "scale": 0.3497947666,
+          "shape": 5.0
+        },
+        "uniform": {
+          "high": 1.0,
+          "low": 0.0
+        }
+      }
+    },
+    "curriculum_id": "hierarchical_full_curriculum",
+    "market_timing": "simultaneous",
+    "mastery_gate": {
+      "consecutive_passes": 2,
+      "score_threshold": 0.0,
+      "strategy_bbp_accuracy": 0.8,
+      "strategy_uniform_accuracy": 0.8,
+      "validation_interval_steps": 5000,
+      "validation_seed_count": 5
+    },
+    "observation_contract_version": "hierarchical_pricing_observation_v2",
+    "opponent_pool": {
+      "families": {
+        "bbp": [
+          "bbp_fixed_discriminator"
+        ],
+        "uniform": [
+          "uniform_fixed"
+        ]
+      },
+      "family_weights": {
+        "bbp": 0.5,
+        "uniform": 0.5
+      }
+    },
+    "protocol_version": "universal_pricing_v2",
+    "regime_commitment_length": 10,
+    "reward_specification": "normalized_net_profit",
+    "seed_manifest": {
+      "final_evaluation_environment_seeds": [
+        3336728789,
+        1115825419,
+        4209236425,
+        1958277543,
+        2852859683,
+        2224261417,
+        3907994052,
+        709315727,
+        970322932,
+        3347600977,
+        2242053229,
+        2767824752,
+        571358767,
+        149994116,
+        2769041360,
+        2505105755,
+        4240823178,
+        2335426345,
+        909436865,
+        3474991468,
+        3529078649,
+        147399555,
+        525543210,
+        2014057640,
+        1786032819,
+        3387155390,
+        2218482782,
+        1130943653,
+        3942213810,
+        2157405226,
+        1264070443,
+        2204693458,
+        3711921879,
+        711528696,
+        2513538549,
+        484937114,
+        625319931,
+        3571366072,
+        229315707,
+        539885261,
+        1145627973,
+        1349791849,
+        1056865539,
+        911594215,
+        615430272,
+        3806314122,
+        2192888819,
+        1427620977,
+        3356841053,
+        3232096941,
+        3732519763,
+        2998128219,
+        1145132762,
+        2069193880,
+        2139075093,
+        3455529551,
+        1852503263,
+        3297631443,
+        2268057410,
+        2589933108,
+        856118389,
+        1293532032,
+        161394534,
+        891070820,
+        2816530863,
+        1682602526,
+        2176132984,
+        4215472652,
+        2520630921,
+        2452189914,
+        3794205915,
+        2923624876,
+        4048072743,
+        95602238,
+        3862568586,
+        1863284379,
+        4094677306,
+        1779607252,
+        3453695176,
+        1285006056,
+        3662092501,
+        4265199489,
+        2109897777,
+        2263371108,
+        1116904469,
+        441077969,
+        3409693813,
+        3035348583,
+        3452788166,
+        1775262291,
+        1035805214,
+        1724297949,
+        3866672395,
+        2233981375,
+        2226428963,
+        722951650,
+        1163756654,
+        830277375,
+        2521640618,
+        1749028560
+      ],
+      "protocol_root_seed": 20260805,
+      "training_roots": [
+        1117257062,
+        1739813875,
+        1419349886,
+        1077354921,
+        1178390433,
+        1139688365,
+        3613669329,
+        4057879167,
+        497110069,
+        2986755770
+      ],
+      "validation_environment_seeds": [
+        3703391142,
+        4075485789,
+        1734295287,
+        4050829272,
+        863719853,
+        251390282,
+        3205418113,
+        3442792960,
+        217835889,
+        2615534499,
+        1478138432,
+        2729924504,
+        1768946074,
+        704437506,
+        1058117336,
+        3737085062,
+        722459123,
+        532809295,
+        2524652648,
+        2400190629,
+        697410702,
+        1925496482,
+        961428310,
+        2752819375,
+        905563065
+      ]
+    },
+    "training_budget": {
+      "bbp_pricing_steps": 60000,
+      "checkpoint_interval_steps": 10000,
+      "environment_steps": 320000,
+      "evaluation_interval_steps": 10000,
+      "strategy_frozen_maximum_steps": 100000,
+      "strategy_frozen_minimum_steps": 50000,
+      "strategy_total_steps": 200000,
+      "uniform_pricing_steps": 60000,
+      "updates_per_step": 1,
+      "warmup_steps": 1000
+    },
+    "uniform_curriculum": {
+      "phase_budget_steps": 60000,
+      "pricing_skill": "uniform",
+      "stages": [
+        {
+          "maximum_steps": 30000,
+          "minimum_steps": 5000,
+          "name": "Uniform Fixed",
+          "opponent_policy_name": "uniform_fixed"
+        },
+        {
+          "maximum_steps": 30000,
+          "minimum_steps": 5000,
+          "name": "BBP Fixed Discriminator",
+          "opponent_policy_name": "bbp_fixed_discriminator"
+        }
+      ]
+    }
+  },
+  "run_id": "universal_pricing_v2__rsac__location-uniform__strategicness-uniform__exclusivity-uniform__seed-00",
+  "run_seed_bundle": {
+    "consumer_population_seed": 2991710405,
+    "exploration_seed": 2429694426,
+    "network_initialization_seed": 3054300148,
+    "opponent_schedule_seed": 2441472154,
+    "replay_sampling_seed": 755276113,
+    "run_seed": 1117257062,
+    "torch_cpu_seed": 2665840589,
+    "torch_cuda_seed": 2533358319
+  },
+  "stage_outcomes": [],
+  "status": "running"
+}
