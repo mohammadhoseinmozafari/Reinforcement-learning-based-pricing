@@ -1,5 +1,8 @@
 {
-  "artifact_references": {},
+  "artifact_references": {
+    "final_checkpoint": "experiments\\upv2\\rsac\\l-u__s-u__e-u\\s00\\ckpt\\final.pt",
+    "metrics": "experiments\\upv2\\rsac\\l-u__s-u__e-u\\s00\\metrics.jsonl"
+  },
   "configuration_hash": "65c9de891ab14b7e6bef1e56896ef2c9960d97025d4fa59ddb4eec7db82a0472",
   "coordinate": {
     "agent_architecture": "rsac",
@@ -12,20 +15,70 @@
   },
   "curriculum_state": {
     "consecutive_mastery_passes": 0,
-    "consolidation": false,
+    "consolidation": true,
     "last_validation_stage_step": 0,
-    "mastery_failures": [],
-    "phase": "uniform_pricing",
+    "mastery_failures": [
+      {
+        "environment_steps": 100000,
+        "mastered": false,
+        "phase": "strategy_frozen",
+        "reason": "maximum_exposure"
+      }
+    ],
+    "phase": "completed",
     "phase_environment_steps": 0,
-    "phase_local_episode_index": 0,
+    "phase_local_episode_index": 1000,
     "stage_environment_steps": 0,
     "stage_index": 0,
-    "stage_local_episode_index": 0,
-    "stage_outcomes": [],
-    "strategy_environment_steps": 0,
-    "total_environment_steps": 0
+    "stage_local_episode_index": 1000,
+    "stage_outcomes": [
+      {
+        "environment_steps": 10000,
+        "mastered": true,
+        "opponent_policy_name": "uniform_fixed",
+        "phase": "uniform_pricing",
+        "reason": "mastery",
+        "skill_score": 5.164158960695339,
+        "stage_index": 0
+      },
+      {
+        "environment_steps": 10000,
+        "mastered": true,
+        "opponent_policy_name": "bbp_fixed_discriminator",
+        "phase": "uniform_pricing",
+        "reason": "mastery",
+        "skill_score": 1.0174194774278917,
+        "stage_index": 1
+      },
+      {
+        "environment_steps": 11000,
+        "mastered": true,
+        "opponent_policy_name": "uniform_fixed",
+        "phase": "bbp_pricing",
+        "reason": "mastery",
+        "skill_score": 2.1253151292089822,
+        "stage_index": 0
+      },
+      {
+        "environment_steps": 11000,
+        "mastered": true,
+        "opponent_policy_name": "bbp_fixed_discriminator",
+        "phase": "bbp_pricing",
+        "reason": "mastery",
+        "skill_score": 1.1549921508658407,
+        "stage_index": 1
+      },
+      {
+        "environment_steps": 100000,
+        "mastered": false,
+        "phase": "strategy_frozen",
+        "reason": "maximum_exposure"
+      }
+    ],
+    "strategy_environment_steps": 200000,
+    "total_environment_steps": 320000
   },
-  "git_commit": "05598e3597529d01563bdefbac09eac3a410f78c",
+  "git_commit": "f69a878b500171ad718005bebbc77ce3fb62a401",
   "hardware_metadata": {
     "bbp_controller_parameters": 209415,
     "cuda": "13.0",
@@ -418,6 +471,49 @@
     "torch_cpu_seed": 2665840589,
     "torch_cuda_seed": 2533358319
   },
-  "stage_outcomes": [],
-  "status": "running"
+  "stage_outcomes": [
+    {
+      "environment_steps": 10000,
+      "mastered": true,
+      "opponent_policy_name": "uniform_fixed",
+      "phase": "uniform_pricing",
+      "reason": "mastery",
+      "skill_score": 5.164158960695339,
+      "stage_index": 0
+    },
+    {
+      "environment_steps": 10000,
+      "mastered": true,
+      "opponent_policy_name": "bbp_fixed_discriminator",
+      "phase": "uniform_pricing",
+      "reason": "mastery",
+      "skill_score": 1.0174194774278917,
+      "stage_index": 1
+    },
+    {
+      "environment_steps": 11000,
+      "mastered": true,
+      "opponent_policy_name": "uniform_fixed",
+      "phase": "bbp_pricing",
+      "reason": "mastery",
+      "skill_score": 2.1253151292089822,
+      "stage_index": 0
+    },
+    {
+      "environment_steps": 11000,
+      "mastered": true,
+      "opponent_policy_name": "bbp_fixed_discriminator",
+      "phase": "bbp_pricing",
+      "reason": "mastery",
+      "skill_score": 1.1549921508658407,
+      "stage_index": 1
+    },
+    {
+      "environment_steps": 100000,
+      "mastered": false,
+      "phase": "strategy_frozen",
+      "reason": "maximum_exposure"
+    }
+  ],
+  "status": "completed"
 }

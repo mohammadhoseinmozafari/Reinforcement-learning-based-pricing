@@ -8,7 +8,7 @@ Unified configuration for economic model and RL environment.
 # ENVIRONMENT PARAMETERS
 # =============================================================================
 
-NUM_CONSUMERS = 500
+NUM_CONSUMERS = 50
 EPISODE_LENGTH = 100
 
 # Hotelling line
