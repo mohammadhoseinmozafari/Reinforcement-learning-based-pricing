@@ -1,0 +1,154 @@
+{
+  "architecture": "rsac",
+  "checkpoint": "experiments\\upv2\\rsac\\l-u__s-u__e-u\\s00\\ckpt\\final.pt",
+  "checkpoint_sha256": "ad28a954710bf326ba3063ee942f04a176572898ff801e36e6d2650a3ffca993",
+  "counterfactuals": {
+    "forced_bbp": {
+      "by_opponent_family": {
+        "bbp": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 1.0,
+          "mean_net_agent_profit_total": 8079.338006274654,
+          "mean_net_profit_advantage_total": 2741.992590358722
+        },
+        "uniform": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 1.0,
+          "mean_net_agent_profit_total": 8517.04105945511,
+          "mean_net_profit_advantage_total": 5447.430085848646
+        }
+      },
+      "episode_count": 200,
+      "mean_agent_bbp_operating_cost_total": 250.0,
+      "mean_bbp_period_fraction": 1.0,
+      "mean_gross_agent_profit_total": 8548.189532864882,
+      "mean_gross_opponent_profit_total": 4328.4781947612,
+      "mean_inference_seconds": 0.002738852964933176,
+      "mean_mean_bbp_new_price": 2.3378944522206297,
+      "mean_mean_bbp_old_price": 3.101791912487761,
+      "mean_mean_bbp_price_spread": 0.7638974602671302,
+      "mean_mean_market_share": 0.638467,
+      "mean_mean_retention_rate": 0.5327752339245346,
+      "mean_mean_uniform_price": 2.75,
+      "mean_net_agent_profit_total": 8298.189532864882,
+      "mean_net_opponent_profit_total": 4203.4781947612,
+      "mean_net_profit_advantage_total": 4094.711338103684,
+      "mean_normalized_net_reward_total": 33.192758131459534,
+      "mean_opponent_bbp_operating_cost_total": 125.0,
+      "mean_regime_change_count": 0.0,
+      "regime_mode": "forced_bbp",
+      "suite": "final"
+    },
+    "forced_uniform": {
+      "by_opponent_family": {
+        "bbp": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 0.0,
+          "mean_net_agent_profit_total": 8295.373889579705,
+          "mean_net_profit_advantage_total": 2480.8694041800777
+        },
+        "uniform": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 0.0,
+          "mean_net_agent_profit_total": 7843.106048209659,
+          "mean_net_profit_advantage_total": 3503.5843417521974
+        }
+      },
+      "episode_count": 200,
+      "mean_agent_bbp_operating_cost_total": 0.0,
+      "mean_bbp_period_fraction": 0.0,
+      "mean_gross_agent_profit_total": 8069.239968894682,
+      "mean_gross_opponent_profit_total": 5202.013095928544,
+      "mean_inference_seconds": 0.0027325367000383266,
+      "mean_mean_bbp_new_price": 2.25,
+      "mean_mean_bbp_old_price": 3.0,
+      "mean_mean_bbp_price_spread": 0.75,
+      "mean_mean_market_share": 0.5634999999999999,
+      "mean_mean_retention_rate": 0.5929567983785398,
+      "mean_mean_uniform_price": 3.0245553479509,
+      "mean_net_agent_profit_total": 8069.239968894682,
+      "mean_net_opponent_profit_total": 5077.013095928544,
+      "mean_net_profit_advantage_total": 2992.2268729661378,
+      "mean_normalized_net_reward_total": 32.276959875578726,
+      "mean_opponent_bbp_operating_cost_total": 125.0,
+      "mean_regime_change_count": 0.0,
+      "regime_mode": "forced_uniform",
+      "suite": "final"
+    },
+    "learned": {
+      "by_opponent_family": {
+        "bbp": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 1.0,
+          "mean_net_agent_profit_total": 8222.39807248399,
+          "mean_net_profit_advantage_total": 3162.599817442778
+        },
+        "uniform": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 1.0,
+          "mean_net_agent_profit_total": 8510.794816931524,
+          "mean_net_profit_advantage_total": 5381.922937019303
+        }
+      },
+      "episode_count": 200,
+      "mean_agent_bbp_operating_cost_total": 250.0,
+      "mean_bbp_period_fraction": 1.0,
+      "mean_gross_agent_profit_total": 8616.596444707757,
+      "mean_gross_opponent_profit_total": 4219.335067476716,
+      "mean_inference_seconds": 0.0027341326950081567,
+      "mean_mean_bbp_new_price": 2.3032782737098842,
+      "mean_mean_bbp_old_price": 3.0327484799493982,
+      "mean_mean_bbp_price_spread": 0.7294702062395143,
+      "mean_mean_market_share": 0.646683,
+      "mean_mean_retention_rate": 0.557610599354737,
+      "mean_mean_uniform_price": 2.75,
+      "mean_net_agent_profit_total": 8366.596444707757,
+      "mean_net_opponent_profit_total": 4094.335067476716,
+      "mean_net_profit_advantage_total": 4272.26137723104,
+      "mean_normalized_net_reward_total": 33.466385778831025,
+      "mean_opponent_bbp_operating_cost_total": 125.0,
+      "mean_regime_change_count": 1.0,
+      "regime_mode": "learned",
+      "suite": "final"
+    },
+    "random_regime": {
+      "by_opponent_family": {
+        "bbp": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 0.5109999999999999,
+          "mean_net_agent_profit_total": 8157.725666819506,
+          "mean_net_profit_advantage_total": 2160.7895430584254
+        },
+        "uniform": {
+          "episode_count": 100,
+          "mean_bbp_period_fraction": 0.49999999999999994,
+          "mean_net_agent_profit_total": 8187.639249892996,
+          "mean_net_profit_advantage_total": 4246.196690143015
+        }
+      },
+      "episode_count": 200,
+      "mean_agent_bbp_operating_cost_total": 126.375,
+      "mean_bbp_period_fraction": 0.5055,
+      "mean_gross_agent_profit_total": 8299.05745835625,
+      "mean_gross_opponent_profit_total": 5094.18934175553,
+      "mean_inference_seconds": 0.002765003574964794,
+      "mean_mean_bbp_new_price": 2.299747836114596,
+      "mean_mean_bbp_old_price": 3.092397869397564,
+      "mean_mean_bbp_price_spread": 0.7926500332829676,
+      "mean_mean_market_share": 0.58229,
+      "mean_mean_retention_rate": 0.5340307974793866,
+      "mean_mean_uniform_price": 3.054592089925167,
+      "mean_net_agent_profit_total": 8172.682458356251,
+      "mean_net_opponent_profit_total": 4969.189341755531,
+      "mean_net_profit_advantage_total": 3203.49311660072,
+      "mean_normalized_net_reward_total": 32.690729833424996,
+      "mean_opponent_bbp_operating_cost_total": 125.0,
+      "mean_regime_change_count": 5.085,
+      "regime_mode": "random_regime",
+      "suite": "final"
+    }
+  },
+  "episode_count": 800,
+  "seed_count": 100,
+  "suite": "final"
+}
